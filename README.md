@@ -8,3 +8,7 @@ To install:
 ```
 curl -fsSL https://raw.githubusercontent.com/PavelDobre/HAPinstall/main/HAProxySetup.sh | bash
 ```
+to convert from WIN to UNIX temporary
+```
+curl -fsSL https://raw.githubusercontent.com/PavelDobre/HAPinstall/main/HAProxySetup.sh | tr -d '\r' | bash
+```
