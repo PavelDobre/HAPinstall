@@ -1,4 +1,8 @@
 # HAPinstall
-Install script for HAProxy in Docker
+! Dont use this script, it's a private template only.
 
-curl -fsSL https://github.com/PavelDobre/HAPinstall/blob/main/HAProxySetup.sh | bash
+Install script for Docker + HAProxy + configure
+To use on clean Ubuntu server to prepare a TCP-mode HAPproxy with round bobin balancing
+
+curl -fsSL https://raw.githubusercontent.com/PavelDobre/HAPinstall/main/HAProxySetup.sh | bash
+
