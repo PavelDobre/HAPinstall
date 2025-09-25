@@ -1,2 +1,2 @@
 # HAPinstall
-Install script for HAProxy
+Install script for HAProxy in Docker
