@@ -70,7 +70,7 @@ sudo sed -i "/^#\?Port /c\Port $SSHPORT" /etc/ssh/sshd_config
 sudo sed -i "/^#\?PermitRootLogin /c\PermitRootLogin no" /etc/ssh/sshd_config
 
 echo "SSH configured: port $SSHPORT, root login disabled."
-sudo systemctl restart sshd
+sudo systemctl restart ssh
 
 # --- 3. Install Docker and Docker Compose and mc ---
 echo "=== Installing Docker and Docker Compose ==="
