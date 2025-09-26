@@ -2,7 +2,7 @@
 
 set -e
 
-# Function fore backing up a file
+# Function for backing up a file
 backup_file() {
     local file="$1"
     if [ -f "$file" ]; then
