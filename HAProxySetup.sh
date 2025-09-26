@@ -79,31 +79,27 @@ echo "=== Installing Docker and Docker Compose ==="
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl gnupg lsb-release mc
 
-# Create keyrings directory if not exists
+# Docker key
 sudo install -m 0755 -d /etc/apt/keyrings
-
-# Add Docker GPG key
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo tee /etc/apt/keyrings/docker.asc > /dev/null
 sudo chmod a+r /etc/apt/keyrings/docker.asc
 
-# Detect Ubuntu codename properly
+# Detect Ubuntu codename
 . /etc/os-release
 UBUNTU_CODENAME=${UBUNTU_CODENAME:-$VERSION_CODENAME}
 
-# Add Docker repository with correct codename
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $UBUNTU_CODENAME stable" | \
-sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+# Add Docker repository (write directly to file)
+sudo bash -c "cat > /etc/apt/sources.list.d/docker.list <<EOF
+deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $UBUNTU_CODENAME stable
+EOF"
 
-# Update package lists
+# Update and install Docker
 sudo apt-get update
-
-# Install Docker engine, CLI, containerd, and Docker Compose plugin
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
-# Enable and start Docker service
+# Enable and start Docker
 sudo systemctl enable docker
 sudo systemctl start docker
-
 echo "Docker and Docker Compose installed successfully."
 
 
