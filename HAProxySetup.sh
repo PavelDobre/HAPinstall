@@ -70,7 +70,8 @@ sudo sed -i "/^#\?Port /c\Port $SSHPORT" /etc/ssh/sshd_config
 sudo sed -i "/^#\?PermitRootLogin /c\PermitRootLogin no" /etc/ssh/sshd_config
 clear
 echo "SSH configured: port $SSHPORT, root login disabled."
-sudo systemctl restart ssh
+sudo systemctl daemon-reload
+sudo systemctl restart ssh.socket
 
 # --- 3. Install Docker and Docker Compose and mc ---
 echo "=== Installing Docker and Docker Compose ==="
@@ -147,7 +148,7 @@ echo
 
 # Create docker-compose.yml with logging section
 cat <<EOF > docker-compose.yml
-version: '3.8'
+
 
 services:
   haproxy:
@@ -217,6 +218,7 @@ echo "=== Starting HAProxy ==="
 sudo docker compose up -d
 
 echo "========================================="
+hostname -I
 echo "Installation completed!"
 echo "HAProxy statistics: http://<server-ip>:9000/"
 echo "Login: $STATS_USER"
