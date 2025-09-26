@@ -8,5 +8,12 @@ To use on clean Ubuntu server to prepare a TCP-mode HAPproxy with round bobin ba
 To install:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/PavelDobre/HAPinstall/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/PavelDobre/HAPinstall/main/HAProxySetup.sh -o HAProxySetup.sh
+chmod +x HAProxySetup.sh
+sudo ./HAProxySetup.sh
+```
+OR:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/PavelDobre/HAPinstall/main/HAProxySetup.sh -o HAProxySetup.sh && chmod +x HAProxySetup.sh && sudo ./HAProxySetup.sh
 ```
