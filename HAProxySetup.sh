@@ -35,7 +35,7 @@ if [[ "$ID" != "ubuntu" ]]; then
     echo "This script is supported only on Ubuntu. Detected OS: $ID"
     exit 1
 fi
-
+clear
 # --- Check that the system is up to date ---
 echo "Checking for system updates..."
 read -p "Would you like to update the system with 'sudo apt-get update && sudo apt-get upgrade -y'? (Recommended!) [y/N]: " UPGRADE_CONFIRM
@@ -43,7 +43,7 @@ if [[ "$UPGRADE_CONFIRM" =~ ^[yY]$ ]]; then
     sudo apt-get update
     sudo apt-get upgrade -y
 fi
-
+clear
 echo "=== HAProxy server installation ==="
 
 # --- 1. Create a user with sudo privileges ---
@@ -68,33 +68,44 @@ SSHPORT=${SSHPORT:-2222}
 
 sudo sed -i "/^#\?Port /c\Port $SSHPORT" /etc/ssh/sshd_config
 sudo sed -i "/^#\?PermitRootLogin /c\PermitRootLogin no" /etc/ssh/sshd_config
-
+clear
 echo "SSH configured: port $SSHPORT, root login disabled."
 sudo systemctl restart ssh
 
 # --- 3. Install Docker and Docker Compose and mc ---
 echo "=== Installing Docker and Docker Compose ==="
+
+# Install dependencies
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl gnupg lsb-release mc
 
-# Add Docker GPG key
+# Create keyrings directory if not exists
 sudo install -m 0755 -d /etc/apt/keyrings
+
+# Add Docker GPG key
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo tee /etc/apt/keyrings/docker.asc > /dev/null
 sudo chmod a+r /etc/apt/keyrings/docker.asc
 
-# Add Docker repository
-echo \
-"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
-$(. /etc/os-release && echo \"\${UBUNTU_CODENAME:-\$VERSION_CODENAME}\") stable" | \
+# Detect Ubuntu codename properly
+. /etc/os-release
+UBUNTU_CODENAME=${UBUNTU_CODENAME:-$VERSION_CODENAME}
+
+# Add Docker repository with correct codename
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $UBUNTU_CODENAME stable" | \
 sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
+# Update package lists
 sudo apt-get update
-sudo apt-get install -y docker-compose-plugin docker-ce docker-ce-cli containerd.io
 
+# Install Docker engine, CLI, containerd, and Docker Compose plugin
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+# Enable and start Docker service
 sudo systemctl enable docker
 sudo systemctl start docker
 
-echo "Docker and Docker Compose installed."
+echo "Docker and Docker Compose installed successfully."
+
 
 # --- 4. Configure HAProxy ---
 backup_file "/opt/haproxy/docker-compose.yml"
