@@ -70,7 +70,7 @@ if [ -f "$CONFIG_FILE" ] && sudo docker ps | grep -q "haproxy"; then
         fi
 
         while true; do
-            echo "\nCurrent HAProxy rules:"
+            echo "Current HAProxy rules:"
             RULE_NUMBER=1
             RULE_LIST=()
 
@@ -82,7 +82,7 @@ if [ -f "$CONFIG_FILE" ] && sudo docker ps | grep -q "haproxy"; then
                 RULE_NUMBER=$((RULE_NUMBER+1))
             done
 
-            echo "\nChoose an action:"
+            echo "Choose an action:"
             echo "A) Add new rule"
             echo "E) Edit existing rule"
             echo "D) Delete rule"
@@ -320,7 +320,7 @@ echo "Configure HAProxy statistics page:"
 read -p "Stats username: " STATS_USER
 read -s -p "Stats password: " STATS_PASS
 
-echo "\nCreating docker-compose.yml..."
+echo "Creating docker-compose.yml..."
 cat <<EOF > "$DOCKER_COMPOSE_FILE"
 services:
   haproxy:
