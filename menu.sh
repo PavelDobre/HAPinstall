@@ -89,7 +89,7 @@ submenu3() {
     while true; do
         clear
         echo " "
-        echo "==== Submenu 2 ===="
+        echo "==== SSH menu ===="
         echo "1) Show settings"
         echo "2) Edit SSH settings"
         echo "3) Add new user"
@@ -99,7 +99,7 @@ submenu3() {
 
         case $choice in
             1) submenu5 ;;
-            2) echo "You chose Sub-option 2-2"; read -rp "Press Enter to continue..." ;;
+            2) submenu6 ;;
             3) echo "You chose Sub-option 2-2"; read -rp "Press Enter to continue..." ;;
             4) return ;;
             *) echo "Invalid choice. Press Enter to try again."
@@ -125,17 +125,33 @@ submenu5() {
         echo "Root login allowed:" && \
         grep -i "^PermitRootLogin" /etc/ssh/sshd_config | awk '{print $2}' || echo "no (default)"
         echo " "
-        echo "1) Return to SSH Menu"
-        echo "2) Return to Main Menu"
         echo "==================="
-        read -rp "Enter your choice: " choice
-
+        read -rp "Press any key to return " choice
         case $choice in
-            1) submenu3 ;;
-            2) return ;;
-            *) echo "Invalid choice. Press Enter to try again."
-               read
-               ;;
+            *) return ;;
+        esac
+    done
+}
+
+# ===============================
+# Edit SSH port settings
+# ===============================
+submenu6() {
+    while true; do
+        clear
+        echo " "
+        backup_file "/etc/ssh/sshd_config"
+        read -p "Enter new SSH port (default 2222): " SSHPORT
+        SSHPORT=${SSHPORT:-2222}
+        sudo sed -i "/^#\?Port /c\Port $SSHPORT" /etc/ssh/sshd_config
+        sudo sed -i "/^#\?PermitRootLogin /c\PermitRootLogin no" /etc/ssh/sshd_config
+        sudo systemctl daemon-reload
+        sudo systemctl restart ssh.socket
+        echo "SSH configured: port $SSHPORT, root login disabled."
+        echo "==================="
+        read -rp "Press any key to return " choice
+        case $choice in
+            *) return ;;
         esac
     done
 }
