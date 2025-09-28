@@ -2,119 +2,294 @@
 
 set -e
 
-# Function for backing up a file
+# ================================================
+# Function: Backup a file with timestamp
+# ================================================
 backup_file() {
     local file="$1"
     if [ -f "$file" ]; then
         sudo cp "$file" "$file.bak_$(date +%F_%T)"
-        echo "Backup for $file created."
+        echo "Backup created for $file."
     fi
 }
 
-# Use the function for needed files
-# backup_file "/etc/ssh/sshd_config"
-# backup_file "/opt/haproxy/docker-compose.yml"
-# backup_file "/opt/haproxy/haproxy.cfg"
-
-
-
-# --- Check if running as root ---
-#if [[ "$EUID" -ne 0 ]]; then
-#    echo "This script must be run as root. Please use sudo or run as the root user."
-#    exit 1
-#fi
-
-# --- Check that the system is Ubuntu ---
+# ================================================
+# Check if the script is run on Ubuntu
+# ================================================
 if [[ ! -f /etc/os-release ]]; then
-    echo "Could not determine the operating system type. This script is supported only on Ubuntu."
+    echo "Cannot determine OS type. This script supports only Ubuntu."
     exit 1
 fi
 
 . /etc/os-release
 if [[ "$ID" != "ubuntu" ]]; then
-    echo "This script is supported only on Ubuntu. Detected OS: $ID"
+    echo "This script supports only Ubuntu. Detected OS: $ID"
     exit 1
 fi
+
 clear
-# --- Check that the system is up to date ---
+
+# ================================================
+# Check for existing HAProxy configuration
+# ================================================
+CONFIG_FILE="/opt/haproxy/haproxy.cfg"
+DOCKER_COMPOSE_FILE="/opt/haproxy/docker-compose.yml"
+
+if [ -f "$CONFIG_FILE" ] && sudo docker ps | grep -q "haproxy"; then
+    echo "HAProxy configuration already exists and is running."
+    echo "What would you like to do?"
+    echo "1) Full reset (overwrite configuration from scratch)"
+    echo "2) Edit existing rules"
+    echo "3) Exit without changes"
+    read -p "Choose an option (1/2/3): " ACTION
+
+    case $ACTION in
+        1)
+            echo "Proceeding with full reset..."
+            ;;
+        2)
+            echo "Entering edit mode..."
+            ;;
+        3)
+            echo "Exiting without changes."
+            exit 0
+            ;;
+        *)
+            echo "Invalid choice. Exiting."
+            exit 1
+            ;;
+    esac
+
+    # ============================================
+    # Edit mode: modify existing rules
+    # ============================================
+    if [[ "$ACTION" == "2" ]]; then
+        if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Configuration file not found. Cannot edit."
+            exit 1
+        fi
+
+        while true; do
+            echo "\nCurrent HAProxy rules:"
+            RULE_NUMBER=1
+            RULE_LIST=()
+
+            for FRONTEND_PORT in $(grep -oP '^frontend frontend_\K[0-9]+' "$CONFIG_FILE"); do
+                BACKEND="backend_${FRONTEND_PORT}"
+                BACKEND_SERVERS=$(awk "/backend $BACKEND/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
+                echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT -> Backends: $BACKEND_SERVERS"
+                RULE_LIST+=("$FRONTEND_PORT")
+                RULE_NUMBER=$((RULE_NUMBER+1))
+            done
+
+            echo "\nChoose an action:"
+            echo "A) Add new rule"
+            echo "E) Edit existing rule"
+            echo "D) Delete rule"
+            echo "X) Exit without changes"
+            read -p "Your choice (A/E/D/X): " RULE_ACTION
+
+            case $RULE_ACTION in
+                A|a)
+                    while true; do
+                        echo "Adding a new rule:"
+                        read -p "  Local port (e.g., 443): " LOCAL_PORT
+
+                        BACKEND_SERVERS=()
+                        while true; do
+                            read -p "  Remote server address: " REMOTE_ADDR
+                            read -p "  Remote server port: " REMOTE_PORT
+                            BACKEND_SERVERS+=("${REMOTE_ADDR}:${REMOTE_PORT}")
+                            read -p "  Add another backend server? (y/n): " ADD_MORE
+                            [[ "$ADD_MORE" =~ ^[yY]$ ]] || break
+                        done
+
+                        echo "\nAdding new frontend/backend to haproxy.cfg"
+                        {
+                            echo ""
+                            echo "frontend frontend_${LOCAL_PORT}"
+                            echo "    bind *:${LOCAL_PORT}"
+                            echo "    default_backend backend_${LOCAL_PORT}"
+                            echo ""
+                            echo "backend backend_${LOCAL_PORT}"
+                            echo "    balance roundrobin"
+                            for i in "${!BACKEND_SERVERS[@]}"; do
+                                echo "    server srv$((i+1)) ${BACKEND_SERVERS[$i]} check"
+                            done
+                        } | sudo tee -a "$CONFIG_FILE" > /dev/null
+
+                        echo "Rule added successfully."
+                        read -p "Add another rule? (y/n): " CONTINUE_ADD
+                        [[ "$CONTINUE_ADD" =~ ^[yY]$ ]] || break
+                    done
+                    ;;
+
+                E|e)
+                    while true; do
+                        echo "Editing an existing rule:"
+                        read -p "Enter the rule number to edit: " EDIT_NUM
+                        EDIT_PORT=${RULE_LIST[$((EDIT_NUM-1))]}
+
+                        if [ -z "$EDIT_PORT" ]; then
+                            echo "Invalid rule number."
+                            break
+                        fi
+
+                        sudo sed -i "/frontend frontend_${EDIT_PORT}/,/^$/d" "$CONFIG_FILE"
+                        sudo sed -i "/backend backend_${EDIT_PORT}/,/^$/d" "$CONFIG_FILE"
+
+                        echo "Enter new configuration for port $EDIT_PORT"
+                        BACKEND_SERVERS=()
+                        while true; do
+                            read -p "  Remote server address: " REMOTE_ADDR
+                            read -p "  Remote server port: " REMOTE_PORT
+                            BACKEND_SERVERS+=("${REMOTE_ADDR}:${REMOTE_PORT}")
+                            read -p "  Add another backend server? (y/n): " ADD_MORE
+                            [[ "$ADD_MORE" =~ ^[yY]$ ]] || break
+                        done
+
+                        {
+                            echo ""
+                            echo "frontend frontend_${EDIT_PORT}"
+                            echo "    bind *:${EDIT_PORT}"
+                            echo "    default_backend backend_${EDIT_PORT}"
+                            echo ""
+                            echo "backend backend_${EDIT_PORT}"
+                            echo "    balance roundrobin"
+                            for i in "${!BACKEND_SERVERS[@]}"; do
+                                echo "    server srv$((i+1)) ${BACKEND_SERVERS[$i]} check"
+                            done
+                        } | sudo tee -a "$CONFIG_FILE" > /dev/null
+
+                        echo "Rule updated successfully."
+                        read -p "Edit another rule? (y/n): " CONTINUE_EDIT
+                        [[ "$CONTINUE_EDIT" =~ ^[yY]$ ]] || break
+                    done
+                    ;;
+
+                D|d)
+                    while true; do
+                        echo "Deleting a rule:"
+                        read -p "Enter the rule number to delete: " DEL_NUM
+                        DEL_PORT=${RULE_LIST[$((DEL_NUM-1))]}
+
+                        if [ -z "$DEL_PORT" ]; then
+                            echo "Invalid rule number."
+                            break
+                        fi
+
+                        sudo sed -i "/frontend frontend_${DEL_PORT}/,/^$/d" "$CONFIG_FILE"
+                        sudo sed -i "/backend backend_${DEL_PORT}/,/^$/d" "$CONFIG_FILE"
+
+                        echo "Rule for port $DEL_PORT deleted successfully."
+                        read -p "Delete another rule? (y/n): " CONTINUE_DEL
+                        [[ "$CONTINUE_DEL" =~ ^[yY]$ ]] || break
+                    done
+                    ;;
+
+                X|x)
+                    echo "Exiting edit mode without changes."
+                    exit 0
+                    ;;
+
+                *)
+                    echo "Invalid option."
+                    ;;
+            esac
+
+            # Restart HAProxy after any modification
+            echo "Restarting HAProxy container..."
+            sudo docker compose -f "$DOCKER_COMPOSE_FILE" down
+            sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
+            echo "HAProxy restarted successfully."
+
+            read -p "Do you want to continue editing rules? (y/n): " CONTINUE_LOOP
+            [[ "$CONTINUE_LOOP" =~ ^[yY]$ ]] || break
+        done
+    fi
+fi
+
+# ================================================
+# If no existing config or full reset chosen, proceed with normal installation
+# ================================================
+
+clear
 echo "Checking for system updates..."
-read -p "Would you like to update the system with 'sudo apt-get update && sudo apt-get upgrade -y'? (Recommended!) [y/N]: " UPGRADE_CONFIRM
+read -p "Update the system with 'sudo apt-get update && sudo apt-get upgrade -y'? (Recommended) [y/N]: " UPGRADE_CONFIRM
 if [[ "$UPGRADE_CONFIRM" =~ ^[yY]$ ]]; then
     sudo apt-get update
     sudo apt-get upgrade -y
 fi
+
 clear
 echo "=== HAProxy server installation ==="
 
-# --- 1. Create a user with sudo privileges ---
+# ================================================
+# Create a user with sudo privileges
+# ================================================
 read -p "Enter the name of the new user: " NEWUSER
-echo
-
-# Create the user if it does not exist
 if id "$NEWUSER" &>/dev/null; then
     echo "User $NEWUSER already exists."
 else
     sudo adduser --disabled-password --gecos "" "$NEWUSER"
-    echo "Now set the password for user $NEWUSER:"
+    echo "Set a password for user $NEWUSER:"
     sudo passwd "$NEWUSER"
     sudo usermod -aG sudo "$NEWUSER"
     echo "User $NEWUSER created and added to the sudo group."
 fi
 
-# --- 2. Configure SSH ---
+# ================================================
+# Configure SSH
+# ================================================
 backup_file "/etc/ssh/sshd_config"
-read -p "Enter new SSH port (default is 2222): " SSHPORT
+read -p "Enter new SSH port (default 2222): " SSHPORT
 SSHPORT=${SSHPORT:-2222}
 
 sudo sed -i "/^#\?Port /c\Port $SSHPORT" /etc/ssh/sshd_config
 sudo sed -i "/^#\?PermitRootLogin /c\PermitRootLogin no" /etc/ssh/sshd_config
-clear
-echo "SSH configured: port $SSHPORT, root login disabled."
 sudo systemctl daemon-reload
 sudo systemctl restart ssh.socket
 
-# --- 3. Install Docker and Docker Compose and mc ---
-echo "=== Installing Docker and Docker Compose ==="
+echo "SSH configured: port $SSHPORT, root login disabled."
 
-# Install dependencies
+# ================================================
+# Install Docker, Docker Compose, and mc
+# ================================================
+echo "Installing Docker and Docker Compose..."
+
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl gnupg lsb-release mc
 
-# Docker key
 sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo tee /etc/apt/keyrings/docker.asc > /dev/null
 sudo chmod a+r /etc/apt/keyrings/docker.asc
 
-# Detect Ubuntu codename
 . /etc/os-release
 UBUNTU_CODENAME=${UBUNTU_CODENAME:-$VERSION_CODENAME}
 
-# Add Docker repository (write directly to file)
 sudo bash -c "cat > /etc/apt/sources.list.d/docker.list <<EOF
 deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $UBUNTU_CODENAME stable
 EOF"
 
-# Update and install Docker
 sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
-# Enable and start Docker
 sudo systemctl enable docker
 sudo systemctl start docker
+
 echo "Docker and Docker Compose installed successfully."
 
+# ================================================
+# Configure HAProxy from scratch
+# ================================================
+backup_file "$DOCKER_COMPOSE_FILE"
+backup_file "$CONFIG_FILE"
 
-# --- 4. Configure HAProxy ---
-backup_file "/opt/haproxy/docker-compose.yml"
-backup_file "/opt/haproxy/haproxy.cfg"
-
-echo "=== Configuring HAProxy ==="
 sudo mkdir -p /opt/haproxy
 cd /opt/haproxy
 
-# Request the main remote server address for proxying
-echo "Enter the main address (or IP) of the remote server for proxying:"
-read -p "Default remote server: " DEFAULT_REMOTE_ADDR
+echo "Enter the default remote backend address:"
+read -p "Default backend address: " DEFAULT_REMOTE_ADDR
 
 FRONTENDS=()
 BACKENDS=()
@@ -125,11 +300,11 @@ while true; do
 
     BACKEND_SERVERS=()
     while true; do
-        read -p "  Remote server address (Enter for $DEFAULT_REMOTE_ADDR): " REMOTE_ADDR
+        read -p "  Remote server address (default: $DEFAULT_REMOTE_ADDR): " REMOTE_ADDR
         REMOTE_ADDR=${REMOTE_ADDR:-$DEFAULT_REMOTE_ADDR}
         read -p "  Remote server port (e.g., 443): " REMOTE_PORT
-        BACKEND_SERVERS+=("$REMOTE_ADDR:$REMOTE_PORT")
-        read -p "  Add another server to this backend for roundrobin load balancing? (y/n): " ADD_MORE
+        BACKEND_SERVERS+=("${REMOTE_ADDR}:${REMOTE_PORT}")
+        read -p "  Add another backend server? (y/n): " ADD_MORE
         [[ "$ADD_MORE" =~ ^[yY]$ ]] || break
     done
 
@@ -140,16 +315,13 @@ while true; do
     [[ "$CONTINUE" =~ ^[yY]$ ]] || break
 done
 
-# --- Set up HAProxy stats page credentials ---
-echo "Configure HAProxy statistics web interface:"
-read -p "Enter username for stats page: " STATS_USER
-read -s -p "Enter password for stats page: " STATS_PASS
-echo
+# Configure HAProxy stats credentials
+echo "Configure HAProxy statistics page:"
+read -p "Stats username: " STATS_USER
+read -s -p "Stats password: " STATS_PASS
 
-# Create docker-compose.yml with logging section
-cat <<EOF > docker-compose.yml
-
-
+echo "\nCreating docker-compose.yml..."
+cat <<EOF > "$DOCKER_COMPOSE_FILE"
 services:
   haproxy:
     image: haproxy:2.9
@@ -166,8 +338,8 @@ services:
         max-file: "5"
 EOF
 
-# Create haproxy.cfg
-cat <<EOF > haproxy.cfg
+# Create haproxy.cfg from scratch
+cat <<EOF > "$CONFIG_FILE"
 global
     log stdout format raw local0
     maxconn 1000
@@ -181,26 +353,25 @@ defaults
     timeout server  1m
 EOF
 
-# Add all configured forwarding rules
+# Add frontend/backend rules
 for i in "${!FRONTENDS[@]}"; do
     LOCAL_PORT="${FRONTENDS[$i]}"
     IFS=',' read -ra SERVERS <<< "${BACKENDS[$i]}"
 
-    echo "" >> haproxy.cfg
-    echo "frontend frontend_$LOCAL_PORT" >> haproxy.cfg
-    echo "    bind *:$LOCAL_PORT" >> haproxy.cfg
-    echo "    default_backend backend_$LOCAL_PORT" >> haproxy.cfg
+    echo "" >> "$CONFIG_FILE"
+    echo "frontend frontend_${LOCAL_PORT}" >> "$CONFIG_FILE"
+    echo "    bind *:${LOCAL_PORT}" >> "$CONFIG_FILE"
+    echo "    default_backend backend_${LOCAL_PORT}" >> "$CONFIG_FILE"
 
-    echo "" >> haproxy.cfg
-    echo "backend backend_$LOCAL_PORT" >> haproxy.cfg
-    echo "    balance roundrobin" >> haproxy.cfg
+    echo "" >> "$CONFIG_FILE"
+    echo "backend backend_${LOCAL_PORT}" >> "$CONFIG_FILE"
+    echo "    balance roundrobin" >> "$CONFIG_FILE"
     for j in "${!SERVERS[@]}"; do
-        echo "    server srv$((j+1)) ${SERVERS[$j]} check" >> haproxy.cfg
+        echo "    server srv$((j+1)) ${SERVERS[$j]} check" >> "$CONFIG_FILE"
     done
 done
 
-# Add HAProxy stats section
-cat <<EOF >> haproxy.cfg
+cat <<EOF >> "$CONFIG_FILE"
 
 listen stats
     bind *:9000
@@ -208,20 +379,21 @@ listen stats
     stats uri /
     stats refresh 5s
     stats auth $STATS_USER:$STATS_PASS
-
 EOF
 
-echo "HAProxy configuration file created."
+echo "HAProxy configuration file created successfully."
 
-# --- 5. Launch HAProxy ---
-echo "=== Starting HAProxy ==="
-sudo docker compose up -d
+# ================================================
+# Launch HAProxy
+# ================================================
+echo "Starting HAProxy..."
+sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
 
+HOST_IP=$(hostname -I | awk '{print $1}')
 echo "========================================="
-hostname -I
 echo "Installation completed!"
-echo "HAProxy statistics: http://<server-ip>:9000/"
-echo "Login: $STATS_USER"
-echo "Password: $STATS_PASS"
-echo "SSH access: ssh $NEWUSER@<server-ip> -p $SSHPORT"
+echo "HAProxy stats: http://$HOST_IP:9000/"
+echo "Stats login: $STATS_USER"
+echo "Stats password: $STATS_PASS"
+echo "SSH access: ssh $NEWUSER@$HOST_IP -p $SSHPORT"
 echo "========================================="
