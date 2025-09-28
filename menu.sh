@@ -202,7 +202,7 @@ submenu2() {
         fi
 
         while true; do
-            echo "\nCurrent HAProxy rules:"
+            echo "Current HAProxy rules:"
             RULE_NUMBER=1
             RULE_LIST=()
 
@@ -224,6 +224,7 @@ submenu2() {
             case $RULE_ACTION in
                 A|a)
                     while true; do
+                    clear
                         echo "Adding a new rule:"
                         read -p "  Local port (e.g., 443): " LOCAL_PORT
 
@@ -236,7 +237,7 @@ submenu2() {
                             [[ "$ADD_MORE" =~ ^[yY]$ ]] || break
                         done
 
-                        echo "\nAdding new frontend/backend to haproxy.cfg"
+                        echo "Adding new frontend/backend to haproxy.cfg"
                         {
                             echo ""
                             echo "frontend frontend_${LOCAL_PORT}"
@@ -258,7 +259,20 @@ submenu2() {
 
                 E|e)
                     while true; do
-                        echo "Editing an existing rule:"
+                    clear
+                    echo " "
+                        echo "Editing an existing rule"
+                        echo "Current HAProxy rules:"
+            RULE_NUMBER=1
+            RULE_LIST=()
+
+            for FRONTEND_PORT in $(grep -oP '^frontend frontend_\K[0-9]+' "$CONFIG_FILE"); do
+                BACKEND="backend_${FRONTEND_PORT}"
+                BACKEND_SERVERS=$(awk "/backend $BACKEND/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
+                echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT -> Backends: $BACKEND_SERVERS"
+                RULE_LIST+=("$FRONTEND_PORT")
+                RULE_NUMBER=$((RULE_NUMBER+1))
+            done
                         read -p "Enter the rule number to edit: " EDIT_NUM
                         EDIT_PORT=${RULE_LIST[$((EDIT_NUM-1))]}
 
@@ -301,7 +315,19 @@ submenu2() {
 
                 D|d)
                     while true; do
-                        echo "Deleting a rule:"
+                    clear
+                        echo "Deleting a rule"
+                        echo "Current HAProxy rules:"
+            RULE_NUMBER=1
+            RULE_LIST=()
+
+            for FRONTEND_PORT in $(grep -oP '^frontend frontend_\K[0-9]+' "$CONFIG_FILE"); do
+                BACKEND="backend_${FRONTEND_PORT}"
+                BACKEND_SERVERS=$(awk "/backend $BACKEND/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
+                echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT -> Backends: $BACKEND_SERVERS"
+                RULE_LIST+=("$FRONTEND_PORT")
+                RULE_NUMBER=$((RULE_NUMBER+1))
+            done
                         read -p "Enter the rule number to delete: " DEL_NUM
                         DEL_PORT=${RULE_LIST[$((DEL_NUM-1))]}
 
@@ -321,7 +347,7 @@ submenu2() {
 
                 X|x)
                     echo "Exiting edit mode without changes."
-                    exit 0
+                    return
                     ;;
 
                 *)
@@ -338,7 +364,6 @@ submenu2() {
             read -p "Do you want to continue editing rules? (y/n): " CONTINUE_LOOP
             [[ "$CONTINUE_LOOP" =~ ^[yY]$ ]] || break
         done
-    fi
 
 
 
