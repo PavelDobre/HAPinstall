@@ -196,95 +196,149 @@ echo " "
 # Edit existing HAProxy conf
 # ===============================
 submenu2() {
-if [ ! -f "$CONFIG_FILE" ]; then
-echo "Invalid rule number."
-break
-fi
+ if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Configuration file not found. Cannot edit."
+            exit 1
+        fi
 
+        while true; do
+            echo "\nCurrent HAProxy rules:"
+            RULE_NUMBER=1
+            RULE_LIST=()
 
-sudo sed -i "/frontend frontend_${EDIT_PORT}/,/^$/d" "$CONFIG_FILE"
-sudo sed -i "/backend backend_${EDIT_PORT}/,/^$/d" "$CONFIG_FILE"
+            for FRONTEND_PORT in $(grep -oP '^frontend frontend_\K[0-9]+' "$CONFIG_FILE"); do
+                BACKEND="backend_${FRONTEND_PORT}"
+                BACKEND_SERVERS=$(awk "/backend $BACKEND/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
+                echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT -> Backends: $BACKEND_SERVERS"
+                RULE_LIST+=("$FRONTEND_PORT")
+                RULE_NUMBER=$((RULE_NUMBER+1))
+            done
 
+            echo "Choose an action:"
+            echo "A) Add new rule"
+            echo "E) Edit existing rule"
+            echo "D) Delete rule"
+            echo "X) Exit without changes"
+            read -p "Your choice (A/E/D/X): " RULE_ACTION
 
-echo "Enter new configuration for port $EDIT_PORT"
-BACKEND_SERVERS=()
-while true; do
-read -p " Remote server address: " REMOTE_ADDR
-read -p " Remote server port: " REMOTE_PORT
-BACKEND_SERVERS+=("${REMOTE_ADDR}:${REMOTE_PORT}")
-read -p " Add another backend server? (y/n): " ADD_MORE
-[[ "$ADD_MORE" =~ ^[yY]$ ]] || break
-done
+            case $RULE_ACTION in
+                A|a)
+                    while true; do
+                        echo "Adding a new rule:"
+                        read -p "  Local port (e.g., 443): " LOCAL_PORT
 
+                        BACKEND_SERVERS=()
+                        while true; do
+                            read -p "  Remote server address: " REMOTE_ADDR
+                            read -p "  Remote server port: " REMOTE_PORT
+                            BACKEND_SERVERS+=("${REMOTE_ADDR}:${REMOTE_PORT}")
+                            read -p "  Add another backend server? (y/n): " ADD_MORE
+                            [[ "$ADD_MORE" =~ ^[yY]$ ]] || break
+                        done
 
-{
-echo ""
-echo "frontend frontend_${EDIT_PORT}"
-echo " bind *:${EDIT_PORT}"
-echo " default_backend backend_${EDIT_PORT}"
-echo ""
-echo "backend backend_${EDIT_PORT}"
-echo " balance roundrobin"
-for i in "${!BACKEND_SERVERS[@]}"; do
-echo " server srv$((i+1)) ${BACKEND_SERVERS[$i]} check"
-done
-} | sudo tee -a "$CONFIG_FILE" > /dev/null
+                        echo "\nAdding new frontend/backend to haproxy.cfg"
+                        {
+                            echo ""
+                            echo "frontend frontend_${LOCAL_PORT}"
+                            echo "    bind *:${LOCAL_PORT}"
+                            echo "    default_backend backend_${LOCAL_PORT}"
+                            echo ""
+                            echo "backend backend_${LOCAL_PORT}"
+                            echo "    balance roundrobin"
+                            for i in "${!BACKEND_SERVERS[@]}"; do
+                                echo "    server srv$((i+1)) ${BACKEND_SERVERS[$i]} check"
+                            done
+                        } | sudo tee -a "$CONFIG_FILE" > /dev/null
 
+                        echo "Rule added successfully."
+                        read -p "Add another rule? (y/n): " CONTINUE_ADD
+                        [[ "$CONTINUE_ADD" =~ ^[yY]$ ]] || break
+                    done
+                    ;;
 
-echo "Rule updated successfully."
-read -p "Edit another rule? (y/n): " CONTINUE_EDIT
-[[ "$CONTINUE_EDIT" =~ ^[yY]$ ]] || break
-done
-;;
+                E|e)
+                    while true; do
+                        echo "Editing an existing rule:"
+                        read -p "Enter the rule number to edit: " EDIT_NUM
+                        EDIT_PORT=${RULE_LIST[$((EDIT_NUM-1))]}
 
+                        if [ -z "$EDIT_PORT" ]; then
+                            echo "Invalid rule number."
+                            break
+                        fi
 
-D|d)
-while true; do
-echo "Deleting a rule:"
-read -p "Enter the rule number to delete: " DEL_NUM
-DEL_PORT=${RULE_LIST[$((DEL_NUM-1))]}
+                        sudo sed -i "/frontend frontend_${EDIT_PORT}/,/^$/d" "$CONFIG_FILE"
+                        sudo sed -i "/backend backend_${EDIT_PORT}/,/^$/d" "$CONFIG_FILE"
 
+                        echo "Enter new configuration for port $EDIT_PORT"
+                        BACKEND_SERVERS=()
+                        while true; do
+                            read -p "  Remote server address: " REMOTE_ADDR
+                            read -p "  Remote server port: " REMOTE_PORT
+                            BACKEND_SERVERS+=("${REMOTE_ADDR}:${REMOTE_PORT}")
+                            read -p "  Add another backend server? (y/n): " ADD_MORE
+                            [[ "$ADD_MORE" =~ ^[yY]$ ]] || break
+                        done
 
-if [ -z "$DEL_PORT" ]; then
-echo "Invalid rule number."
-break
-fi
+                        {
+                            echo ""
+                            echo "frontend frontend_${EDIT_PORT}"
+                            echo "    bind *:${EDIT_PORT}"
+                            echo "    default_backend backend_${EDIT_PORT}"
+                            echo ""
+                            echo "backend backend_${EDIT_PORT}"
+                            echo "    balance roundrobin"
+                            for i in "${!BACKEND_SERVERS[@]}"; do
+                                echo "    server srv$((i+1)) ${BACKEND_SERVERS[$i]} check"
+                            done
+                        } | sudo tee -a "$CONFIG_FILE" > /dev/null
 
+                        echo "Rule updated successfully."
+                        read -p "Edit another rule? (y/n): " CONTINUE_EDIT
+                        [[ "$CONTINUE_EDIT" =~ ^[yY]$ ]] || break
+                    done
+                    ;;
 
-sudo sed -i "/frontend frontend_${DEL_PORT}/,/^$/d" "$CONFIG_FILE"
-sudo sed -i "/backend backend_${DEL_PORT}/,/^$/d" "$CONFIG_FILE"
+                D|d)
+                    while true; do
+                        echo "Deleting a rule:"
+                        read -p "Enter the rule number to delete: " DEL_NUM
+                        DEL_PORT=${RULE_LIST[$((DEL_NUM-1))]}
 
+                        if [ -z "$DEL_PORT" ]; then
+                            echo "Invalid rule number."
+                            break
+                        fi
 
-echo "Rule for port $DEL_PORT deleted successfully."
-read -p "Delete another rule? (y/n): " CONTINUE_DEL
-[[ "$CONTINUE_DEL" =~ ^[yY]$ ]] || break
-done
-;;
+                        sudo sed -i "/frontend frontend_${DEL_PORT}/,/^$/d" "$CONFIG_FILE"
+                        sudo sed -i "/backend backend_${DEL_PORT}/,/^$/d" "$CONFIG_FILE"
 
+                        echo "Rule for port $DEL_PORT deleted successfully."
+                        read -p "Delete another rule? (y/n): " CONTINUE_DEL
+                        [[ "$CONTINUE_DEL" =~ ^[yY]$ ]] || break
+                    done
+                    ;;
 
-X|x)
-echo "Exiting edit mode without changes."
-exit 0
-;;
+                X|x)
+                    echo "Exiting edit mode without changes."
+                    exit 0
+                    ;;
 
+                *)
+                    echo "Invalid option."
+                    ;;
+            esac
 
-*)
-echo "Invalid option."
-;;
-esac
+            # Restart HAProxy after any modification
+            echo "Restarting HAProxy container..."
+            sudo docker compose -f "$DOCKER_COMPOSE_FILE" down
+            sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
+            echo "HAProxy restarted successfully."
 
-
-# Restart HAProxy after any modification
-echo "Restarting HAProxy container..."
-sudo docker compose -f "$DOCKER_COMPOSE_FILE" down
-sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
-echo "HAProxy restarted successfully."
-
-
-read -p "Do you want to continue editing rules? (y/n): " CONTINUE_LOOP
-[[ "$CONTINUE_LOOP" =~ ^[yY]$ ]] || break
-done
-fi
+            read -p "Do you want to continue editing rules? (y/n): " CONTINUE_LOOP
+            [[ "$CONTINUE_LOOP" =~ ^[yY]$ ]] || break
+        done
+    fi
 
 
 
