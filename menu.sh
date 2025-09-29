@@ -188,8 +188,8 @@ echo "Installation completed!"
 echo "HAProxy stats: http://$HOST_IP:9000/"
 echo "Stats login: $STATS_USER"
 echo "Stats password: $STATS_PASS"
-echo "SSH access: ssh $NEWUSER@$HOST_IP -p $SSHPORT"
 echo "========================================="
+echo " = = Don't forget to change SSH port and add SSH user = ="
 echo " "
         read -rp "Press any key to return " choice
         case $choice in
@@ -496,7 +496,8 @@ submenu4() {
         clear
         echo " "
         echo "===== Current config ============="
-        echo "Host IP: " && HOST_IP=$(hostname -I | awk '{print $1}') && $HOST_IP
+        HOST_IP=$(hostname -I | awk '{print $1}')
+        echo "Host IP: $HOST_IP"
         echo "---------------------------------"
         echo "Current HAProxy rules:"
             RULE_NUMBER=1
