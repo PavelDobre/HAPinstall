@@ -466,25 +466,60 @@ submenu7() {
         grep -E "(/bin/bash|/bin/sh|/bin/zsh)$" /etc/passwd | cut -d: -f1
         echo " "
         read -p "Enter the name of the new user: " NEWUSER
-        if id "$NEWUSER" &>/dev/null; then
-        echo "User $NEWUSER already exists."
-        else
-        sudo adduser --disabled-password --gecos "" "$NEWUSER"
-        echo "Set a password for user $NEWUSER:"
-        sudo passwd "$NEWUSER"
-        sudo usermod -aG sudo "$NEWUSER"
-        echo "User $NEWUSER created and added to the sudo group."
-fi
-        echo "1) Add another SSH user"
-        echo "2) Return"
-        echo "==================="
-        read -rp "Enter your choice: " choice
+            if id "$NEWUSER" &>/dev/null; then
+                echo "User $NEWUSER already exists."
+            else
+                sudo adduser --disabled-password --gecos "" "$NEWUSER"
+                echo "Set a password for user $NEWUSER:"
+                sudo passwd "$NEWUSER"
+                sudo usermod -aG sudo "$NEWUSER"
+                echo "User $NEWUSER created and added to the sudo group."
+            fi
+        echo " "
+        read -rp "Press any key to return " choice
         case $choice in
-        1) submenu7 ;;
-        2) return ;;
-        *) echo "Invalid choice. Press Enter to try again."
-               read
-               ;;
+            *) return ;;
+        esac
+    done
+}
+
+# ===============================
+# Show current config
+# ===============================
+submenu4() {
+    while true; do
+        clear
+        echo " "
+        echo "===== Current config ============="
+        echo "Host IP: " && HOST_IP=$(hostname -I | awk '{print $1}')
+        echo "---------------------------------"
+        echo "Current HAProxy rules:"
+            RULE_NUMBER=1
+            RULE_LIST=()
+            for FRONTEND_PORT in $(grep -oP '^frontend frontend_\K[0-9]+' "$CONFIG_FILE"); do
+                BACKEND="backend_${FRONTEND_PORT}"
+                BACKEND_SERVERS=$(awk "/backend $BACKEND/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
+                echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT -> Backends: $BACKEND_SERVERS"
+                RULE_LIST+=("$FRONTEND_PORT")
+                RULE_NUMBER=$((RULE_NUMBER+1))
+            done
+        echo "---------------------------------"
+        echo "HAProxy stat: http://<serverIP>:9000/"
+        grep -E "^\s*stats auth" /opt/haproxy/haproxy.cfg | awk '{split($3, creds, ":"); print "User: " creds[1] "\nPass: " creds[2]}'
+        echo "---------------------------------"
+        echo "Users with shell access:" && \
+        grep -E "(/bin/bash|/bin/sh|/bin/zsh)$" /etc/passwd | cut -d: -f1 && \
+        echo && \
+        echo "SSH Port:" && \
+        grep -i "^Port" /etc/ssh/sshd_config | awk '{print $2}' || echo "22 (default)" && \
+        echo && \
+        echo "Root login allowed:" && \
+        grep -i "^PermitRootLogin" /etc/ssh/sshd_config | awk '{print $2}' || echo "no (default)"
+        echo "---------------------------------"
+
+        read -rp "Press any key to return " choice
+        case $choice in
+            *) return ;;
         esac
     done
 }
