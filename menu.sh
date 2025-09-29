@@ -369,7 +369,6 @@ submenu2() {
 
 HOST_IP=$(hostname -I | awk '{print $1}')
 echo "========================================="
-echo "Installation completed!"
 echo "HAProxy stats: http://$HOST_IP:9000/"
 echo "Stats login: $STATS_USER"
 echo "Stats password: $STATS_PASS"
@@ -440,6 +439,8 @@ submenu6() {
     while true; do
         clear
         echo " "
+        echo "Current SSH Port:" && \
+        grep -i "^Port" /etc/ssh/sshd_config | awk '{print $2}' || echo "22 (default)"
         backup_file "/etc/ssh/sshd_config"
         read -p "Enter new SSH port (default 2222): " SSHPORT
         SSHPORT=${SSHPORT:-2222}
@@ -458,9 +459,11 @@ submenu6() {
 # ===============================
 # Add new SSH user
 # ===============================
-submenu7,() {
+submenu7() {
     while true; do
         clear
+        echo "Current users:" && \
+        grep -E "(/bin/bash|/bin/sh|/bin/zsh)$" /etc/passwd | cut -d: -f1
         echo " "
         read -p "Enter the name of the new user: " NEWUSER
         if id "$NEWUSER" &>/dev/null; then
