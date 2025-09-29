@@ -17,12 +17,14 @@ main_menu() {
         clear
         echo " "
         echo "==== HAProxy tcp-mode ===="
+        echo " "
         echo "==== Main Menu ===="
         echo "1) New HAProxy installation"
         echo "2) Edit existing HAProxy configuration"
         echo "3) SSH user and port Configuration"
         echo "4) Show current config"
         echo "5) Exit"
+        echo " "
         echo "=================="
         read -rp "Enter your choice: " choice
 
@@ -48,6 +50,7 @@ submenu1() {
     echo "Checking for system updates..."
     read -p "Update the system with 'sudo apt-get update && sudo apt-get upgrade -y'? (Recommended) [y/N]: " UPGRADE_CONFIRM
         if [[ "$UPGRADE_CONFIRM" =~ ^[yY]$ ]]; then
+            sudo rm -f /etc/apt/sources.list.d/docker.list
             sudo apt-get update
             sudo apt-get upgrade -y
         fi
@@ -392,7 +395,7 @@ submenu3() {
         echo " "
         echo "==== SSH menu ===="
         echo "1) Show settings"
-        echo "2) Edit SSH settings"
+        echo "2) Edit SSH port"
         echo "3) Add new SSH user"
         echo "4) Return to Main Menu"
         echo "==================="
@@ -493,7 +496,7 @@ submenu4() {
         clear
         echo " "
         echo "===== Current config ============="
-        echo "Host IP: " && HOST_IP=$(hostname -I | awk '{print $1}')
+        echo "Host IP: " && HOST_IP=$(hostname -I | awk '{print $1}') && $HOST_IP
         echo "---------------------------------"
         echo "Current HAProxy rules:"
             RULE_NUMBER=1
@@ -506,7 +509,9 @@ submenu4() {
                 RULE_NUMBER=$((RULE_NUMBER+1))
             done
         echo "---------------------------------"
-        echo "HAProxy stat: http://<serverIP>:9000/"
+        #HOST_IP=$(hostname -I | awk '{print $1}')
+        echo "HAProxy stats: http://$HOST_IP:9000/"
+        #echo "HAProxy stat: http://<serverIP>:9000/"
         grep -E "^\s*stats auth" /opt/haproxy/haproxy.cfg | awk '{split($3, creds, ":"); print "User: " creds[1] "\nPass: " creds[2]}'
         echo "---------------------------------"
         echo "Users with shell access:" && \
