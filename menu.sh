@@ -541,9 +541,9 @@ submenu4() {
 # Stop HAProxy
 # ===============================
 submenu8() {
-    sudo docker compose ps --services --filter "status=running" | grep -qw haproxy && sudo docker compose -f "$DOCKER_COMPOSE_FILE" down && echo "Haproxy stopped" || echo "Haproxy is not running"
+    sudo docker compose -f "$DOCKER_COMPOSE_FILE" ps --services --filter "status=running" | grep -qw haproxy && sudo docker compose -f "$DOCKER_COMPOSE_FILE" down && echo "Haproxy stopped" || echo "Haproxy is not running"
     echo " "
-    sudo docker compose ps --format "table {{.Name}}\t{{.State}}"
+    sudo docker compose -f "$DOCKER_COMPOSE_FILE" ps --format "table {{.Name}}\t{{.State}}"
     echo " "
         read -rp "Press any key to return " choice
         case $choice in
@@ -557,9 +557,9 @@ submenu8() {
 # ===============================
 submenu9() {
     #sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
-    sudo docker compose ps --services --filter "status=running" | grep -qw haproxy && echo "Haproxy already started" || sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
+    sudo docker compose -f "$DOCKER_COMPOSE_FILE" ps --services --filter "status=running" | grep -qw haproxy && echo "Haproxy already started" || sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
     echo " "
-    sudo docker compose ps --format "table {{.Name}}\t{{.State}}"
+    sudo docker compose -f "$DOCKER_COMPOSE_FILE" ps --format "table {{.Name}}\t{{.State}}"
     echo " "
         read -rp "Press any key to return " choice
         case $choice in
