@@ -22,8 +22,10 @@ main_menu() {
         echo "1) New HAProxy installation"
         echo "2) Edit existing HAProxy configuration"
         echo "3) SSH user and port Configuration"
-        echo "4) Show current config"
-        echo "5) Exit"
+        echo "4) Stop HAProxy"
+        echo "5) Start HAProxy"
+        echo "6) Show current config"
+        echo "7) Exit"
         echo " "
         echo "=================="
         read -rp "Enter your choice: " choice
@@ -173,8 +175,9 @@ cat <<EOF >> "$CONFIG_FILE"
 
 listen stats
     bind *:9000
+    mode http
     stats enable
-    stats uri /
+    stats uri /stats
     stats refresh 5s
     stats auth $STATS_USER:$STATS_PASS
 EOF
@@ -185,7 +188,7 @@ sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
 HOST_IP=$(hostname -I | awk '{print $1}')
 echo "========================================="
 echo "Installation completed!"
-echo "HAProxy stats: http://$HOST_IP:9000/"
+echo "HAProxy stats: http://$HOST_IP:9000/stats"
 echo "Stats login: $STATS_USER"
 echo "Stats password: $STATS_PASS"
 echo "========================================="
@@ -531,6 +534,37 @@ submenu4() {
         esac
     done
 }
+
+# ===============================
+# Stop HAProxy
+# ===============================
+submenu8() {
+    sudo docker compose ps --services --filter "status=running" | grep -qw haproxy && sudo docker compose -f "$DOCKER_COMPOSE_FILE" down && echo "Haproxy stopped" || echo "Haproxy is not running"
+    echo " "
+    sudo docker compose ps --format "table {{.Name}}\t{{.State}}"
+    echo " "
+        read -rp "Press any key to return " choice
+        case $choice in
+            *) return ;;
+        esac
+}
+
+
+# ===============================
+# Start HAProxy
+# ===============================
+submenu9() {
+    #sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
+    sudo docker compose ps --services --filter "status=running" | grep -qw haproxy && echo "Haproxy already started" || sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
+    echo " "
+    sudo docker compose ps --format "table {{.Name}}\t{{.State}}"
+    echo " "
+        read -rp "Press any key to return " choice
+        case $choice in
+            *) return ;;
+        esac
+}
+
 
 
 # ===============================

@@ -8,13 +8,13 @@ To be used on clean Ubuntu server to quick prepare a TCP-mode HAPproxy with conf
 To install:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/PavelDobre/HAPinstall/main/HAProxySetup.sh -o HAProxySetup.sh
-chmod +x HAProxySetup.sh
-sudo ./HAProxySetup.sh
+curl -fsSL https://raw.githubusercontent.com/PavelDobre/HAPinstall/main/menu.sh -o menu.sh
+chmod +x menu.sh
+sudo ./menu.sh
 ```
 OR:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/PavelDobre/HAPinstall/main/HAProxySetup.sh -o HAProxySetup.sh && chmod +x HAProxySetup.sh && sudo ./HAProxySetup.sh
+curl -fsSL https://raw.githubusercontent.com/PavelDobre/HAPinstall/main/menu.sh -o menu.sh && chmod +x menu.sh && sudo ./menu.sh
 
 ```
