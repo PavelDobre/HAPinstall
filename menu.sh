@@ -34,8 +34,10 @@ main_menu() {
             1) submenu1 ;;
             2) submenu2 ;;
             3) submenu3 ;;
-            4) submenu4 ;;
-            5) exit 0   ;;
+            4) submenu8 ;;
+            5) submenu9 ;;
+            6) submenu4 ;;
+            7) exit 0   ;;
             *) echo "Invalid choice. Press Enter to try again."
                read
                ;;
