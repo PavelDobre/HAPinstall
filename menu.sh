@@ -562,7 +562,7 @@ submenu6() {
         echo "Current SSH Port:" && \
         grep -i "^Port" /etc/ssh/sshd_config | awk '{print $2}' || echo "22 (default)"
         backup_file "/etc/ssh/sshd_config"
-        prompt_for_port SSHPORT "Enter new SSH port (default 2222): " 2222
+        prompt_for_port SSHPORT "Enter new SSH port (default 22): " 22
         sudo sed -i "/^#\?Port /c\Port $SSHPORT" /etc/ssh/sshd_config
         sudo sed -i "/^#\?PermitRootLogin /c\PermitRootLogin no" /etc/ssh/sshd_config
         sudo systemctl daemon-reload
