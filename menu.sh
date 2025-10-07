@@ -1,5 +1,81 @@
 #!/bin/bash
 set -e
+set -o pipefail
+
+# ===============================
+# Validation Helpers
+# ===============================
+is_valid_ipv4() {
+    local ip="$1"
+    if [[ ! $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+        return 1
+    fi
+    local IFS='.'
+    read -r o1 o2 o3 o4 <<< "$ip"
+    for o in "$o1" "$o2" "$o3" "$o4"; do
+        # strip leading zeros via base 10 and check range 0..255
+        if ! [[ $o =~ ^[0-9]+$ ]]; then return 1; fi
+        if (( 10#$o < 0 || 10#$o > 255 )); then return 1; fi
+    done
+    return 0
+}
+
+is_valid_hostname() {
+    local h="$1"
+    # RFC 1123 hostname pattern (basic)
+    [[ $h =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(\.([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*$ ]]
+}
+
+is_valid_host() {
+    local h="$1"
+    if [[ $h =~ ^[0-9]+(\.[0-9]+){3}$ ]]; then
+        is_valid_ipv4 "$h"
+        return $?
+    fi
+    is_valid_hostname "$h"
+}
+
+prompt_for_host() {
+    local __varname="$1"; shift
+    local prompt="$1"; shift
+    local default="${1:-}"
+    local input
+    while true; do
+        if [[ -n "$default" ]]; then
+            read -rp "$prompt" input
+            input=${input:-$default}
+        else
+            read -rp "$prompt" input
+        fi
+        if is_valid_host "$input"; then
+            printf -v "$__varname" '%s' "$input"
+            break
+        else
+            echo "Invalid address. Enter IPv4 (e.g., 1.2.3.4) or hostname."
+        fi
+    done
+}
+
+prompt_for_port() {
+    local __varname="$1"; shift
+    local prompt="$1"; shift
+    local default="${1:-}"
+    local input
+    while true; do
+        if [[ -n "$default" ]]; then
+            read -rp "$prompt" input
+            input=${input:-$default}
+        else
+            read -rp "$prompt" input
+        fi
+        if [[ $input =~ ^[0-9]+$ ]] && (( input >= 1 && input <= 65535 )); then
+            printf -v "$__varname" '%s' "$input"
+            break
+        else
+            echo "Invalid port. Enter a number 1-65535."
+        fi
+    done
+}
 
 backup_file() {
     local file="$1"
@@ -52,7 +128,7 @@ submenu1() {
     clear
     echo " "
     echo "Checking for system updates..."
-    read -p "Update the system with 'sudo apt-get update && sudo apt-get upgrade -y'? (Recommended) [y/N]: " UPGRADE_CONFIRM
+    read -rp "Update the system with 'sudo apt-get update && sudo apt-get upgrade -y'? (Recommended) [y/N]: " UPGRADE_CONFIRM
         if [[ "$UPGRADE_CONFIRM" =~ ^[yY]$ ]]; then
             sudo rm -f /etc/apt/sources.list.d/docker.list
             sudo apt-get update
@@ -92,35 +168,35 @@ sudo mkdir -p /opt/haproxy
 cd /opt/haproxy
 
 echo "Enter the default remote backend address:"
-read -p "Default backend address: " DEFAULT_REMOTE_ADDR
+prompt_for_host DEFAULT_REMOTE_ADDR "Default backend address: "
 
 FRONTENDS=()
 BACKENDS=()
 
     while true; do
         echo "Adding a new forwarding rule:"
-        read -p "  Local port (e.g., 443): " LOCAL_PORT
+        prompt_for_port LOCAL_PORT "  Local port (e.g., 443): "
 
     BACKEND_SERVERS=()
     while true; do
-        read -p "  Remote server address (default: $DEFAULT_REMOTE_ADDR): " REMOTE_ADDR
-        REMOTE_ADDR=${REMOTE_ADDR:-$DEFAULT_REMOTE_ADDR}
-        read -p "  Remote server port (e.g., 443): " REMOTE_PORT
+        prompt_for_host REMOTE_ADDR "  Remote server address (default: $DEFAULT_REMOTE_ADDR): " "$DEFAULT_REMOTE_ADDR"
+        prompt_for_port REMOTE_PORT "  Remote server port (e.g., 443): "
         BACKEND_SERVERS+=("${REMOTE_ADDR}:${REMOTE_PORT}")
-        read -p "  Add another backend server? (y/n): " ADD_MORE
+        read -rp "  Add another backend server? (y/n): " ADD_MORE
         [[ "$ADD_MORE" =~ ^[yY]$ ]] || break
     done
 
     FRONTENDS+=("$LOCAL_PORT")
     BACKENDS+=("$(IFS=','; echo "${BACKEND_SERVERS[*]}")")
 
-    read -p "Add another rule? (y/n): " CONTINUE
+    read -rp "Add another rule? (y/n): " CONTINUE
     [[ "$CONTINUE" =~ ^[yY]$ ]] || break
     done
     # Configure HAProxy stats credentials
 echo "Configure HAProxy statistics page:"
-read -p "Stats username: " STATS_USER
-read -s -p "Stats password: " STATS_PASS
+read -rp "Stats username: " STATS_USER
+read -rs -p "Stats password: " STATS_PASS
+echo
 
 echo "Creating docker-compose.yml..."
 cat <<EOF > "$DOCKER_COMPOSE_FILE"
@@ -216,7 +292,7 @@ submenu2() {
             RULE_NUMBER=1
             RULE_LIST=()
 
-            for FRONTEND_PORT in $(grep -oP '^frontend frontend_\K[0-9]+' "$CONFIG_FILE"); do
+            for FRONTEND_PORT in $(grep -E '^frontend frontend_[0-9]+' "$CONFIG_FILE" | sed -E 's/^frontend frontend_([0-9]+).*/\1/'); do
                 BACKEND="backend_${FRONTEND_PORT}"
                 BACKEND_SERVERS=$(awk "/backend $BACKEND/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
                 echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT -> Backends: $BACKEND_SERVERS"
@@ -229,21 +305,21 @@ submenu2() {
             echo "E) Edit existing rule"
             echo "D) Delete rule"
             echo "X) Exit without changes"
-            read -p "Your choice (A/E/D/X): " RULE_ACTION
+            read -rp "Your choice (A/E/D/X): " RULE_ACTION
 
             case $RULE_ACTION in
                 A|a)
                     while true; do
                     clear
                         echo "Adding a new rule:"
-                        read -p "  Local port (e.g., 443): " LOCAL_PORT
+                        prompt_for_port LOCAL_PORT "  Local port (e.g., 443): "
 
                         BACKEND_SERVERS=()
                         while true; do
-                            read -p "  Remote server address: " REMOTE_ADDR
-                            read -p "  Remote server port: " REMOTE_PORT
+                            prompt_for_host REMOTE_ADDR "  Remote server address: "
+                            prompt_for_port REMOTE_PORT "  Remote server port: "
                             BACKEND_SERVERS+=("${REMOTE_ADDR}:${REMOTE_PORT}")
-                            read -p "  Add another backend server? (y/n): " ADD_MORE
+                            read -rp "  Add another backend server? (y/n): " ADD_MORE
                             [[ "$ADD_MORE" =~ ^[yY]$ ]] || break
                         done
 
@@ -262,7 +338,7 @@ submenu2() {
                         } | sudo tee -a "$CONFIG_FILE" > /dev/null
 
                         echo "Rule added successfully."
-                        read -p "Add another rule? (y/n): " CONTINUE_ADD
+                        read -rp "Add another rule? (y/n): " CONTINUE_ADD
                         [[ "$CONTINUE_ADD" =~ ^[yY]$ ]] || break
                     done
                     ;;
@@ -276,14 +352,23 @@ submenu2() {
             RULE_NUMBER=1
             RULE_LIST=()
 
-            for FRONTEND_PORT in $(grep -oP '^frontend frontend_\K[0-9]+' "$CONFIG_FILE"); do
+            for FRONTEND_PORT in $(grep -E '^frontend frontend_[0-9]+' "$CONFIG_FILE" | sed -E 's/^frontend frontend_([0-9]+).*/\1/'); do
                 BACKEND="backend_${FRONTEND_PORT}"
                 BACKEND_SERVERS=$(awk "/backend $BACKEND/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
                 echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT -> Backends: $BACKEND_SERVERS"
                 RULE_LIST+=("$FRONTEND_PORT")
                 RULE_NUMBER=$((RULE_NUMBER+1))
             done
-                        read -p "Enter the rule number to edit: " EDIT_NUM
+                        while true; do
+                            read -rp "Enter the rule number to edit: " EDIT_NUM
+                            if [[ $EDIT_NUM =~ ^[0-9]+$ ]]; then
+                                RULE_COUNT=${#RULE_LIST[@]}
+                                if (( EDIT_NUM >= 1 && EDIT_NUM <= RULE_COUNT )); then
+                                    break
+                                fi
+                            fi
+                            echo "Invalid selection. Enter a number between 1 and ${#RULE_LIST[@]}."
+                        done
                         EDIT_PORT=${RULE_LIST[$((EDIT_NUM-1))]}
 
                         if [ -z "$EDIT_PORT" ]; then
@@ -297,10 +382,10 @@ submenu2() {
                         echo "Enter new configuration for port $EDIT_PORT"
                         BACKEND_SERVERS=()
                         while true; do
-                            read -p "  Remote server address: " REMOTE_ADDR
-                            read -p "  Remote server port: " REMOTE_PORT
+                            prompt_for_host REMOTE_ADDR "  Remote server address: "
+                            prompt_for_port REMOTE_PORT "  Remote server port: "
                             BACKEND_SERVERS+=("${REMOTE_ADDR}:${REMOTE_PORT}")
-                            read -p "  Add another backend server? (y/n): " ADD_MORE
+                            read -rp "  Add another backend server? (y/n): " ADD_MORE
                             [[ "$ADD_MORE" =~ ^[yY]$ ]] || break
                         done
 
@@ -318,7 +403,7 @@ submenu2() {
                         } | sudo tee -a "$CONFIG_FILE" > /dev/null
 
                         echo "Rule updated successfully."
-                        read -p "Edit another rule? (y/n): " CONTINUE_EDIT
+                        read -rp "Edit another rule? (y/n): " CONTINUE_EDIT
                         [[ "$CONTINUE_EDIT" =~ ^[yY]$ ]] || break
                     done
                     ;;
@@ -331,14 +416,23 @@ submenu2() {
             RULE_NUMBER=1
             RULE_LIST=()
 
-            for FRONTEND_PORT in $(grep -oP '^frontend frontend_\K[0-9]+' "$CONFIG_FILE"); do
+            for FRONTEND_PORT in $(grep -E '^frontend frontend_[0-9]+' "$CONFIG_FILE" | sed -E 's/^frontend frontend_([0-9]+).*/\1/'); do
                 BACKEND="backend_${FRONTEND_PORT}"
                 BACKEND_SERVERS=$(awk "/backend $BACKEND/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
                 echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT -> Backends: $BACKEND_SERVERS"
                 RULE_LIST+=("$FRONTEND_PORT")
                 RULE_NUMBER=$((RULE_NUMBER+1))
             done
-                        read -p "Enter the rule number to delete: " DEL_NUM
+                        while true; do
+                            read -rp "Enter the rule number to delete: " DEL_NUM
+                            if [[ $DEL_NUM =~ ^[0-9]+$ ]]; then
+                                RULE_COUNT=${#RULE_LIST[@]}
+                                if (( DEL_NUM >= 1 && DEL_NUM <= RULE_COUNT )); then
+                                    break
+                                fi
+                            fi
+                            echo "Invalid selection. Enter a number between 1 and ${#RULE_LIST[@]}."
+                        done
                         DEL_PORT=${RULE_LIST[$((DEL_NUM-1))]}
 
                         if [ -z "$DEL_PORT" ]; then
@@ -350,7 +444,7 @@ submenu2() {
                         sudo sed -i "/backend backend_${DEL_PORT}/,/^$/d" "$CONFIG_FILE"
 
                         echo "Rule for port $DEL_PORT deleted successfully."
-                        read -p "Delete another rule? (y/n): " CONTINUE_DEL
+                        read -rp "Delete another rule? (y/n): " CONTINUE_DEL
                         [[ "$CONTINUE_DEL" =~ ^[yY]$ ]] || break
                     done
                     ;;
@@ -365,13 +459,18 @@ submenu2() {
                     ;;
             esac
 
-            # Restart HAProxy after any modification
-            echo "Restarting HAProxy container..."
-            sudo docker compose -f "$DOCKER_COMPOSE_FILE" down
-            sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
-            echo "HAProxy restarted successfully."
+            # Restart HAProxy after any modification (with quick config validation)
+            echo "Validating haproxy.cfg before restart..."
+            if sudo docker run --rm -v "$CONFIG_FILE":/usr/local/etc/haproxy/haproxy.cfg:ro haproxy:2.9 haproxy -c -f /usr/local/etc/haproxy/haproxy.cfg; then
+                echo "Configuration valid. Restarting HAProxy container..."
+                sudo docker compose -f "$DOCKER_COMPOSE_FILE" down
+                sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
+                echo "HAProxy restarted successfully."
+            else
+                echo "Invalid HAProxy configuration. Not restarting. Please fix errors above."
+            fi
 
-            read -p "Do you want to continue editing rules? (y/n): " CONTINUE_LOOP
+            read -rp "Do you want to continue editing rules? (y/n): " CONTINUE_LOOP
             [[ "$CONTINUE_LOOP" =~ ^[yY]$ ]] || break
         done
 
@@ -379,7 +478,7 @@ submenu2() {
 
 HOST_IP=$(hostname -I | awk '{print $1}')
 echo "========================================="
-echo "HAProxy stats: http://$HOST_IP:9000/"
+echo "HAProxy stats: http://$HOST_IP:9000/stats"
 echo "Stats login: $STATS_USER"
 echo "Stats password: $STATS_PASS"
 echo "SSH access: ssh $NEWUSER@$HOST_IP -p $SSHPORT"
@@ -452,8 +551,7 @@ submenu6() {
         echo "Current SSH Port:" && \
         grep -i "^Port" /etc/ssh/sshd_config | awk '{print $2}' || echo "22 (default)"
         backup_file "/etc/ssh/sshd_config"
-        read -p "Enter new SSH port (default 2222): " SSHPORT
-        SSHPORT=${SSHPORT:-2222}
+        prompt_for_port SSHPORT "Enter new SSH port (default 2222): " 2222
         sudo sed -i "/^#\?Port /c\Port $SSHPORT" /etc/ssh/sshd_config
         sudo sed -i "/^#\?PermitRootLogin /c\PermitRootLogin no" /etc/ssh/sshd_config
         sudo systemctl daemon-reload
@@ -475,7 +573,7 @@ submenu7() {
         echo "Current users:" && \
         grep -E "(/bin/bash|/bin/sh|/bin/zsh)$" /etc/passwd | cut -d: -f1
         echo " "
-        read -p "Enter the name of the new user: " NEWUSER
+        read -rp "Enter the name of the new user: " NEWUSER
             if id "$NEWUSER" &>/dev/null; then
                 echo "User $NEWUSER already exists."
             else
@@ -507,7 +605,7 @@ submenu4() {
         echo "Current HAProxy rules:"
             RULE_NUMBER=1
             RULE_LIST=()
-            for FRONTEND_PORT in $(grep -oP '^frontend frontend_\K[0-9]+' "$CONFIG_FILE"); do
+            for FRONTEND_PORT in $(grep -E '^frontend frontend_[0-9]+' "$CONFIG_FILE" | sed -E 's/^frontend frontend_([0-9]+).*/\1/'); do
                 BACKEND="backend_${FRONTEND_PORT}"
                 BACKEND_SERVERS=$(awk "/backend $BACKEND/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
                 echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT -> Backends: $BACKEND_SERVERS"
@@ -516,7 +614,7 @@ submenu4() {
             done
         echo "---------------------------------"
         #HOST_IP=$(hostname -I | awk '{print $1}')
-        echo "HAProxy stats: http://$HOST_IP:9000/"
+        echo "HAProxy stats: http://$HOST_IP:9000/stats"
         #echo "HAProxy stat: http://<serverIP>:9000/"
         grep -E "^\s*stats auth" /opt/haproxy/haproxy.cfg | awk '{split($3, creds, ":"); print "User: " creds[1] "\nPass: " creds[2]}'
         echo "---------------------------------"
