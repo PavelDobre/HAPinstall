@@ -498,7 +498,7 @@ submenu2() {
 #        case $choice in
 #            *) return ;;
 #        esac
-return ;;
+return
 }
 
 # ===============================
