@@ -359,6 +359,11 @@ submenu2() {
                 RULE_LIST+=("$FRONTEND_PORT")
                 RULE_NUMBER=$((RULE_NUMBER+1))
             done
+                        if (( ${#RULE_LIST[@]} == 0 )); then
+                            echo "No rules available to edit."
+                            read -rp "Press Enter to return " _
+                            break
+                        fi
                         while true; do
                             read -rp "Enter the rule number to edit: " EDIT_NUM
                             if [[ $EDIT_NUM =~ ^[0-9]+$ ]]; then
@@ -423,6 +428,11 @@ submenu2() {
                 RULE_LIST+=("$FRONTEND_PORT")
                 RULE_NUMBER=$((RULE_NUMBER+1))
             done
+                        if (( ${#RULE_LIST[@]} == 0 )); then
+                            echo "No rules available to delete."
+                            read -rp "Press Enter to return " _
+                            break
+                        fi
                         while true; do
                             read -rp "Enter the rule number to delete: " DEL_NUM
                             if [[ $DEL_NUM =~ ^[0-9]+$ ]]; then
