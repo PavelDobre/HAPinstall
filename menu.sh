@@ -486,18 +486,19 @@ submenu2() {
 
 
 
-HOST_IP=$(hostname -I | awk '{print $1}')
-echo "========================================="
-echo "HAProxy stats: http://$HOST_IP:9000/stats"
-echo "Stats login: $STATS_USER"
-echo "Stats password: $STATS_PASS"
-echo "SSH access: ssh $NEWUSER@$HOST_IP -p $SSHPORT"
-echo "========================================="
-echo " "
-        read -rp "Press any key to return " choice
-        case $choice in
-            *) return ;;
-        esac
+#HOST_IP=$(hostname -I | awk '{print $1}')
+#echo "========================================="
+#echo "HAProxy stats: http://$HOST_IP:9000/stats"
+#echo "Stats login: $STATS_USER"
+#echo "Stats password: $STATS_PASS"
+#echo "SSH access: ssh $NEWUSER@$HOST_IP -p $SSHPORT"
+#echo "========================================="
+#echo " "
+#        read -rp "Press any key to return " choice
+#        case $choice in
+#            *) return ;;
+#        esac
+return ;;
 }
 
 # ===============================
