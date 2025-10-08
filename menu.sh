@@ -158,15 +158,17 @@ submenu1() {
 
     sudo systemctl enable docker
     sudo systemctl start docker
-
-    echo "Docker and Docker Compose installed successfully."
+clear
+    echo "Docker installed successfully."
+    echo " "
+    echo "=== HAProxy server configuration ==="
     
     backup_file "$DOCKER_COMPOSE_FILE"
 backup_file "$CONFIG_FILE"
 
 sudo mkdir -p /opt/haproxy
 cd /opt/haproxy
-
+echo " "
 echo "Enter the default remote backend address:"
 prompt_for_host DEFAULT_REMOTE_ADDR "Default backend address: "
 
@@ -566,7 +568,28 @@ submenu6() {
         sudo sed -i "/^#\?Port /c\Port $SSHPORT" /etc/ssh/sshd_config
         sudo sed -i "/^#\?PermitRootLogin /c\PermitRootLogin no" /etc/ssh/sshd_config
         sudo systemctl daemon-reload
-        sudo systemctl restart ssh.socket
+        sudo systemctl restart ssh || sudo systemctl restart sshd
+        if sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null; then
+            echo "SSH service restarted successfully."
+        else
+            echo "Failed to restart SSH service."
+        fi
+        if systemctl is-active --quiet ssh || systemctl is-active --quiet sshd; then
+            echo "SSH is running."
+            PORT_INFO=$(sudo ss -tlnp | grep sshd || true)
+                if [ -n "$PORT_INFO" ]; then
+                    echo "Listening ports:"
+                    echo "$PORT_INFO"
+                else
+                    echo "Could not detect SSH listening port."
+                fi
+        else
+            echo "SSH is not running. Please check configuration or logs with:"
+            echo "   sudo journalctl -u ssh --no-pager | tail -20"
+            exit 1
+        fi
+
+
         echo "SSH configured: port $SSHPORT, root login disabled."
         echo "==================="
         read -rp "Press any key to return " choice
