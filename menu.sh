@@ -564,11 +564,14 @@ submenu6() {
         echo "Current SSH Port:" && \
         grep -i "^Port" /etc/ssh/sshd_config | awk '{print $2}' || echo "22 (default)"
         backup_file "/etc/ssh/sshd_config"
+        echo " "
         prompt_for_port SSHPORT "Enter new SSH port (default 22): " 22
         sudo sed -i "/^#\?Port /c\Port $SSHPORT" /etc/ssh/sshd_config
         sudo sed -i "/^#\?PermitRootLogin /c\PermitRootLogin no" /etc/ssh/sshd_config
         sudo systemctl daemon-reload
         sudo systemctl restart ssh || sudo systemctl restart sshd
+        echo " "
+        echo "==================="
         if sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null; then
             echo "SSH service restarted successfully."
         else
@@ -576,6 +579,8 @@ submenu6() {
         fi
         if systemctl is-active --quiet ssh || systemctl is-active --quiet sshd; then
             echo "SSH is running."
+            echo " "
+            echo "==================="
             PORT_INFO=$(sudo ss -tlnp | grep sshd || true)
                 if [ -n "$PORT_INFO" ]; then
                     echo "Listening ports:"
@@ -589,7 +594,8 @@ submenu6() {
             exit 1
         fi
 
-
+        echo " "
+        echo "==================="
         echo "SSH configured: port $SSHPORT, root login disabled."
         echo "==================="
         read -rp "Press any key to return " choice
