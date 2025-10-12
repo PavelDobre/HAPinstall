@@ -93,7 +93,7 @@ main_menu() {
         clear
         echo " "
         echo "==== HAProxy tcp-mode ===="
-        echo " "
+        echo " v.2.0"
         echo "==== Main Menu ===="
         echo "1) New HAProxy installation"
         echo "2) Edit existing HAProxy configuration"
@@ -306,8 +306,9 @@ submenu2() {
             echo "A) Add new rule"
             echo "E) Edit existing rule"
             echo "D) Delete rule"
-            echo "X) Exit without changes"
-            read -rp "Your choice (A/E/D/X): " RULE_ACTION
+            echo "S) add Special rule"
+            echo "X) eXit without changes"
+            read -rp "Your choice (A/E/D/S/X): " RULE_ACTION
 
             case $RULE_ACTION in
                 A|a)
@@ -460,6 +461,89 @@ submenu2() {
                         [[ "$CONTINUE_DEL" =~ ^[yY]$ ]] || break
                     done
                     ;;
+
+                    S|s)
+                    clear
+                    echo "=== Add  special rule (by source IP) ==="
+                    prompt_for_host SOURCE_IP "Enter source IP (client): "
+                    prompt_for_host BACKEND_IP "Enter backend IP (target): "
+
+                    echo "Do you want to:"
+                    echo "1) Add ACL and backend to existing frontend(s) (default)"
+                    echo "2) Create new dedicated frontend/backend"
+                    read -rp "Select option [1/2]: " MODE_CHOICE
+                    MODE_CHOICE=${MODE_CHOICE:-1}
+
+                    if [ "$MODE_CHOICE" == "1" ]; then
+                        # list of available frontends
+                        AVAILABLE_FRONTENDS=()
+                        while IFS= read -r line; do
+                            PORT=$(echo "$line" | sed -E 's/^frontend frontend_([0-9]+).*/\1/')
+                            AVAILABLE_FRONTENDS+=("$PORT")
+                        done < <(grep -E '^frontend frontend_[0-9]+' "$CONFIG_FILE")
+
+                        if [ ${#AVAILABLE_FRONTENDS[@]} -eq 0 ]; then
+                            echo "No existing frontends found. Please add at least one first."
+                            read -rp "Press Enter to return " _
+                            continue
+                        fi
+
+                        ADD_MORE_FRONTENDS="y"
+                        while [[ "$ADD_MORE_FRONTENDS" =~ ^[Yy]$ ]]; do
+                            echo "Available frontends:"
+                            for i in "${!AVAILABLE_FRONTENDS[@]}"; do
+                                echo "[$((i+1))] frontend_${AVAILABLE_FRONTENDS[$i]}"
+                            done
+                            read -rp "Enter the number of the frontend to modify: " CHOICE
+                            TARGET_PORT=${AVAILABLE_FRONTENDS[$((CHOICE-1))]}
+                            BACKEND_NAME="backend_${TARGET_PORT}_special"
+                            ACL_NAME="from_${SOURCE_IP//./_}"
+
+                            # If already exists ACL for this IP
+                            if grep -q "acl $ACL_NAME src $SOURCE_IP" "$CONFIG_FILE"; then
+                                echo "ACL for $SOURCE_IP already exists — updating backend target..."
+                                # Delete old line
+                                sudo sed -i "/backend $BACKEND_NAME/,/^$/s#server srv1 .*#server srv1 ${BACKEND_IP}:${TARGET_PORT} check#g" "$CONFIG_FILE"
+                            else
+                                # add new ACL
+                                {
+                                    echo ""
+                                    echo "    # Special routing for $SOURCE_IP"
+                                    echo "    acl $ACL_NAME src $SOURCE_IP"
+                                    echo "    use_backend $BACKEND_NAME if $ACL_NAME"
+                                    echo ""
+                                    echo "backend $BACKEND_NAME"
+                                    echo "    balance roundrobin"
+                                    echo "    server srv1 ${BACKEND_IP}:${TARGET_PORT} check"
+                                } | sudo tee -a "$CONFIG_FILE" > /dev/null
+                                echo "Special rule added for $SOURCE_IP -> $BACKEND_IP (frontend port $TARGET_PORT)."
+                            fi
+
+                            read -rp "Add this same rule to another frontend? (y/n): " ADD_MORE_FRONTENDS
+                        done
+
+                    else
+                        # new frontend/backend
+                        prompt_for_port LOCAL_PORT "Enter local port to bind (e.g. 443): "
+                        ACL_NAME="from_${SOURCE_IP//./_}"
+                        {
+                            echo ""
+                            echo "frontend frontend_${LOCAL_PORT}_special"
+                            echo "    bind *:${LOCAL_PORT}"
+                            echo "    acl $ACL_NAME src $SOURCE_IP"
+                            echo "    use_backend backend_${LOCAL_PORT}_special if $ACL_NAME"
+                            echo "    default_backend backend_${LOCAL_PORT}"
+                            echo ""
+                            echo "backend backend_${LOCAL_PORT}_special"
+                            echo "    balance roundrobin"
+                            echo "    server srv1 ${BACKEND_IP}:${LOCAL_PORT} check"
+                        } | sudo tee -a "$CONFIG_FILE" > /dev/null
+
+                        echo "Created new special frontend/backend for $SOURCE_IP -> $BACKEND_IP on port $LOCAL_PORT."
+                    fi
+                    ;;
+
+
 
                 X|x)
                     echo "Exiting edit mode without changes."
