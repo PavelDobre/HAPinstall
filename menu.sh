@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 set -o pipefail
-VER="2.2 Beta-4"
+VER="2.2 Beta-5"
 # ===============================
 # Validation Helpers
 # ===============================
@@ -331,7 +331,7 @@ clear
                 RULE_LIST+=("$FRONTEND_PORT")
                 RULE_NUMBER=$((RULE_NUMBER+1))
             done
-    Echo "****************************************"
+    
     show_haproxy_rules "$CONFIG_FILE"
         
             echo "Choose an action:"
@@ -394,7 +394,7 @@ clear
                 RULE_LIST+=("$FRONTEND_PORT")
                 RULE_NUMBER=$((RULE_NUMBER+1))
             done
-Echo "****************************************"
+
     show_haproxy_rules "$CONFIG_FILE"
                         if (( ${#RULE_LIST[@]} == 0 )); then
                             echo "No rules available to edit."
@@ -465,7 +465,7 @@ Echo "****************************************"
                 RULE_LIST+=("$FRONTEND_PORT")
                 RULE_NUMBER=$((RULE_NUMBER+1))
             done
-Echo "****************************************"
+
     show_haproxy_rules "$CONFIG_FILE"
                         if (( ${#RULE_LIST[@]} == 0 )); then
                             echo "No rules available to delete."
