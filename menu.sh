@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 set -o pipefail
-$VER = "2.2 Beta"
+VER="2.2 Beta-1"
 # ===============================
 # Validation Helpers
 # ===============================
@@ -99,30 +99,34 @@ show_haproxy_rules() {
     local RULE_NUMBER=1
     local RULE_LIST=()
 
+    # Найдём все frontend'ы вида "frontend frontend_<port>"
     for FRONTEND_PORT in $(grep -E '^frontend frontend_[0-9]+' "$CONFIG_FILE" | sed -E 's/^frontend frontend_([0-9]+).*/\1/'); do
         echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT"
 
+        # --- основной backend ---
         local BACKEND_MAIN="backend_${FRONTEND_PORT}"
         local BACKEND_SERVERS
-        BACKEND_SERVERS=$(awk "/^backend $BACKEND_MAIN/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
+        BACKEND_SERVERS=$(awk "/^backend $BACKEND_MAIN\$/,/^(frontend|backend|listen|global|defaults)/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
         if [ -n "$BACKEND_SERVERS" ]; then
             echo "   └─ Default backend: $BACKEND_SERVERS"
         else
             echo "   └─ Default backend: (none)"
         fi
 
+        # --- ACL и use_backend (special rules) ---
         local ACL_BLOCK
-        ACL_BLOCK=$(awk "/^frontend frontend_${FRONTEND_PORT}/,/^$/" "$CONFIG_FILE" | grep -E 'acl .*src|use_backend')
+        ACL_BLOCK=$(awk "/^frontend frontend_${FRONTEND_PORT}\$/,/^(frontend|backend|listen|global|defaults)/" "$CONFIG_FILE" | grep -E 'acl .*src|use_backend')
         if [ -n "$ACL_BLOCK" ]; then
             echo "   └─ ACL rules:"
             echo "$ACL_BLOCK" | sed 's/^/      /'
         fi
 
+        # --- дополнительные backend'ы (special) ---
         local BACKEND_SPECIALS
         BACKEND_SPECIALS=$(grep -E "^backend ${BACKEND_MAIN}_" "$CONFIG_FILE" | awk '{print $2}')
         for B in $BACKEND_SPECIALS; do
             local BACKEND_SERVERS
-            BACKEND_SERVERS=$(awk "/^backend $B/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
+            BACKEND_SERVERS=$(awk "/^backend $B\$/,/^(frontend|backend|listen|global|defaults)/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
             echo "   └─ Special backend: $B -> $BACKEND_SERVERS"
         done
 
