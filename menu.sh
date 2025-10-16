@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 set -o pipefail
-
+VER = "2.2 Beta"
 # ===============================
 # Validation Helpers
 # ===============================
@@ -85,6 +85,59 @@ backup_file() {
     fi
 }
 
+show_haproxy_rules() {
+    local CONFIG_FILE="$1"
+
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo "Configuration file not found: $CONFIG_FILE"
+        return 1
+    fi
+
+    echo "Current HAProxy rules:"
+    echo "======================"
+
+    local RULE_NUMBER=1
+    local RULE_LIST=()
+
+    for FRONTEND_PORT in $(grep -E '^frontend frontend_[0-9]+' "$CONFIG_FILE" | sed -E 's/^frontend frontend_([0-9]+).*/\1/'); do
+        echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT"
+
+        local BACKEND_MAIN="backend_${FRONTEND_PORT}"
+        local BACKEND_SERVERS
+        BACKEND_SERVERS=$(awk "/^backend $BACKEND_MAIN/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
+        if [ -n "$BACKEND_SERVERS" ]; then
+            echo "   └─ Default backend: $BACKEND_SERVERS"
+        else
+            echo "   └─ Default backend: (none)"
+        fi
+
+        local ACL_BLOCK
+        ACL_BLOCK=$(awk "/^frontend frontend_${FRONTEND_PORT}/,/^$/" "$CONFIG_FILE" | grep -E 'acl .*src|use_backend')
+        if [ -n "$ACL_BLOCK" ]; then
+            echo "   └─ ACL rules:"
+            echo "$ACL_BLOCK" | sed 's/^/      /'
+        fi
+
+        local BACKEND_SPECIALS
+        BACKEND_SPECIALS=$(grep -E "^backend ${BACKEND_MAIN}_" "$CONFIG_FILE" | awk '{print $2}')
+        for B in $BACKEND_SPECIALS; do
+            local BACKEND_SERVERS
+            BACKEND_SERVERS=$(awk "/^backend $B/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
+            echo "   └─ Special backend: $B -> $BACKEND_SERVERS"
+        done
+
+        echo ""
+        RULE_LIST+=("$FRONTEND_PORT")
+        RULE_NUMBER=$((RULE_NUMBER+1))
+    done
+
+    if [ ${#RULE_LIST[@]} -eq 0 ]; then
+        echo "No frontend rules found in configuration."
+    fi
+}
+
+
+
 # ===============================
 # Main Menu Function
 # ===============================
@@ -93,7 +146,7 @@ main_menu() {
         clear
         echo " "
         echo "==== HAProxy tcp-mode ===="
-        echo " v.2.01"
+        echo $VER
         echo "==== Main Menu ===="
         echo "1) New HAProxy installation"
         echo "2) Edit existing HAProxy configuration"
@@ -272,6 +325,9 @@ echo "HAProxy stats: http://$HOST_IP:9000/stats"
 echo "Stats login: $STATS_USER"
 echo "Stats password: $STATS_PASS"
 echo "========================================="
+show_haproxy_rules "$CONFIG_FILE"
+echo "========================================="
+
 echo " = = Don't forget to change SSH port and add SSH user = ="
 echo " "
         read -rp "Press any key to return " choice
@@ -301,7 +357,7 @@ clear
                 RULE_LIST+=("$FRONTEND_PORT")
                 RULE_NUMBER=$((RULE_NUMBER+1))
             done
-
+show_haproxy_rules "$CONFIG_FILE"
             echo "Choose an action:"
             echo "A) Add new rule"
             echo "E) Edit existing rule"
@@ -362,6 +418,7 @@ clear
                 RULE_LIST+=("$FRONTEND_PORT")
                 RULE_NUMBER=$((RULE_NUMBER+1))
             done
+show_haproxy_rules "$CONFIG_FILE"
                         if (( ${#RULE_LIST[@]} == 0 )); then
                             echo "No rules available to edit."
                             read -rp "Press Enter to return " _
@@ -431,6 +488,7 @@ clear
                 RULE_LIST+=("$FRONTEND_PORT")
                 RULE_NUMBER=$((RULE_NUMBER+1))
             done
+ show_haproxy_rules "$CONFIG_FILE"
                         if (( ${#RULE_LIST[@]} == 0 )); then
                             echo "No rules available to delete."
                             read -rp "Press Enter to return " _
@@ -475,7 +533,7 @@ clear
                     MODE_CHOICE=${MODE_CHOICE:-1}
 
                     if [ "$MODE_CHOICE" == "1" ]; then
-                        # --- Найдём все доступные frontend'ы ---
+                        
                         AVAILABLE_FRONTENDS=()
                         while IFS= read -r line; do
                             PORT=$(echo "$line" | sed -E 's/^frontend frontend_([0-9]+).*/\1/')
@@ -502,7 +560,7 @@ clear
 
                             echo "→ Processing $FRONTEND_NAME ..."
 
-                            # 1️⃣ Проверим / создадим backend-блок
+                           
                             if grep -q "^backend[[:space:]]\+$BACKEND_NAME\b" "$CONFIG_FILE"; then
                                 echo "Updating existing backend target for $BACKEND_NAME..."
                                 sudo sed -i "/^backend[[:space:]]\+$BACKEND_NAME\b/,/^$/ s#^\([[:space:]]*server[[:space:]]\+\)\S\+[[:space:]]\+\S\+#\1srv1 ${BACKEND_IP}:${TARGET_PORT}#" "$CONFIG_FILE"
@@ -515,7 +573,7 @@ clear
                                 } | sudo tee -a "$CONFIG_FILE" >/dev/null
                             fi
 
-                            # 2️⃣ Вставим ACL/use_backend внутрь frontend (если ещё нет)
+                           
                             if ! awk -v f="$FRONTEND_NAME" -v a="$ACL_NAME" '
                               $0 ~ "^frontend[[:space:]]+"f"$" { in_f=1 }
                               in_f && $0 ~ "^frontend[[:space:]]" && $0 !~ f { in_f=0 }
@@ -537,7 +595,7 @@ clear
                         done
 
                     else
-                        # --- Создаём отдельный frontend/backend ---
+                        
                         prompt_for_port LOCAL_PORT "Enter local port to bind (e.g. 443): "
                         ACL_NAME="from_${SOURCE_IP//./_}"
                         {
