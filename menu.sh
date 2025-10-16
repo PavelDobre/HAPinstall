@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 set -o pipefail
-VER="2.2 Beta-3"
+VER="2.2 Beta-4"
 # ===============================
 # Validation Helpers
 # ===============================
@@ -87,58 +87,30 @@ backup_file() {
 
 show_haproxy_rules() {
     local CONFIG_FILE="$1"
-
-    if [ ! -f "$CONFIG_FILE" ]; then
-        echo "Configuration file not found: $CONFIG_FILE"
-        return 1
-    fi
-
     echo "Current HAProxy rules:"
-    echo "======================"
-
     local RULE_NUMBER=1
     local RULE_LIST=()
 
-    # Находим все frontend'ы вида "frontend frontend_<port>"
+
     for FRONTEND_PORT in $(grep -E '^frontend frontend_[0-9]+' "$CONFIG_FILE" | sed -E 's/^frontend frontend_([0-9]+).*/\1/'); do
-        echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT"
-
-        # --- основной backend ---
-        local BACKEND_MAIN="backend_${FRONTEND_PORT}"
+        local BACKEND="backend_${FRONTEND_PORT}"
         local BACKEND_SERVERS
-        BACKEND_SERVERS=$(awk "/^backend $BACKEND_MAIN/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
-        if [ -n "$BACKEND_SERVERS" ]; then
-            echo "   └─ Default backend: $BACKEND_SERVERS"
-        else
-            echo "   └─ Default backend: (none)"
-        fi
+        BACKEND_SERVERS=$(awk "/^backend $BACKEND/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
 
-        # --- ACL и use_backend (special rules) ---
-        local ACL_BLOCK
-        ACL_BLOCK=$(awk "/^frontend frontend_${FRONTEND_PORT}/,/^$/" "$CONFIG_FILE" | grep -E 'acl .*src|use_backend')
-        if [ -n "$ACL_BLOCK" ]; then
-            echo "   └─ ACL rules:"
-            echo "$ACL_BLOCK" | sed 's/^/      /'
-        fi
+        echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT -> Backends: $BACKEND_SERVERS"
 
-        # --- дополнительные backend'ы (special) ---
-        local BACKEND_SPECIALS
-        BACKEND_SPECIALS=$(grep -E "^backend ${BACKEND_MAIN}_" "$CONFIG_FILE" | awk '{print $2}')
-        for B in $BACKEND_SPECIALS; do
-            local BACKEND_SERVERS
-            BACKEND_SERVERS=$(awk "/^backend $B/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
-            echo "   └─ Special backend: $B -> $BACKEND_SERVERS"
-        done
-
-        echo ""
         RULE_LIST+=("$FRONTEND_PORT")
-        RULE_NUMBER=$((RULE_NUMBER+1))
+        RULE_NUMBER=$((RULE_NUMBER + 1))
     done
 
+
     if [ ${#RULE_LIST[@]} -eq 0 ]; then
-        echo "No frontend rules found in configuration."
+        echo "No frontend rules found."
     fi
+
+    return 0
 }
+
 
 
 # ===============================
@@ -328,8 +300,7 @@ echo "HAProxy stats: http://$HOST_IP:9000/stats"
 echo "Stats login: $STATS_USER"
 echo "Stats password: $STATS_PASS"
 echo "========================================="
-show_haproxy_rules "$CONFIG_FILE"
-echo "========================================="
+
 
 echo " = = Don't forget to change SSH port and add SSH user = ="
 echo " "
@@ -360,7 +331,9 @@ clear
                 RULE_LIST+=("$FRONTEND_PORT")
                 RULE_NUMBER=$((RULE_NUMBER+1))
             done
-            show_haproxy_rules "$CONFIG_FILE"
+    Echo "****************************************"
+    show_haproxy_rules "$CONFIG_FILE"
+        
             echo "Choose an action:"
             echo "A) Add new rule"
             echo "E) Edit existing rule"
@@ -421,7 +394,8 @@ clear
                 RULE_LIST+=("$FRONTEND_PORT")
                 RULE_NUMBER=$((RULE_NUMBER+1))
             done
-show_haproxy_rules "$CONFIG_FILE"
+Echo "****************************************"
+    show_haproxy_rules "$CONFIG_FILE"
                         if (( ${#RULE_LIST[@]} == 0 )); then
                             echo "No rules available to edit."
                             read -rp "Press Enter to return " _
@@ -491,7 +465,8 @@ show_haproxy_rules "$CONFIG_FILE"
                 RULE_LIST+=("$FRONTEND_PORT")
                 RULE_NUMBER=$((RULE_NUMBER+1))
             done
- show_haproxy_rules "$CONFIG_FILE"
+Echo "****************************************"
+    show_haproxy_rules "$CONFIG_FILE"
                         if (( ${#RULE_LIST[@]} == 0 )); then
                             echo "No rules available to delete."
                             read -rp "Press Enter to return " _
