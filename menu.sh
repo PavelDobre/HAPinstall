@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 set -o pipefail
-VER="2.2 Beta-2"
+VER="2.2 Beta-3"
 # ===============================
 # Validation Helpers
 # ===============================
@@ -99,54 +99,46 @@ show_haproxy_rules() {
     local RULE_NUMBER=1
     local RULE_LIST=()
 
-    # Извлекаем все frontend'ы вида frontend_<порт>
-    mapfile -t FRONTENDS < <(grep -E '^frontend frontend_[0-9]+' "$CONFIG_FILE" | awk '{print $2}')
+    # Находим все frontend'ы вида "frontend frontend_<port>"
+    for FRONTEND_PORT in $(grep -E '^frontend frontend_[0-9]+' "$CONFIG_FILE" | sed -E 's/^frontend frontend_([0-9]+).*/\1/'); do
+        echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT"
 
-    if [ ${#FRONTENDS[@]} -eq 0 ]; then
-        echo "No frontend rules found in configuration."
-        return
-    fi
-
-    for FRONTEND in "${FRONTENDS[@]}"; do
-        local PORT=${FRONTEND#frontend_}
-        echo "[$RULE_NUMBER] Frontend port: $PORT"
-
-        # --- Основной backend ---
-        local BACKEND_MAIN="backend_${PORT}"
+        # --- основной backend ---
+        local BACKEND_MAIN="backend_${FRONTEND_PORT}"
         local BACKEND_SERVERS
-        BACKEND_SERVERS=$(awk "/^backend $BACKEND_MAIN\$/,/^(frontend|backend|listen|global|defaults|$)/" "$CONFIG_FILE" | grep -E '^[[:space:]]*server ' | awk '{print $3}')
-
+        BACKEND_SERVERS=$(awk "/^backend $BACKEND_MAIN/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
         if [ -n "$BACKEND_SERVERS" ]; then
             echo "   └─ Default backend: $BACKEND_SERVERS"
         else
             echo "   └─ Default backend: (none)"
         fi
 
-        # --- ACL и use_backend внутри фронтенда ---
-        local ACL_RULES
-        ACL_RULES=$(awk "/^frontend $FRONTEND\$/,/^(frontend|backend|listen|global|defaults|$)/" "$CONFIG_FILE" | grep -E 'acl .*src|use_backend')
-        if [ -n "$ACL_RULES" ]; then
+        # --- ACL и use_backend (special rules) ---
+        local ACL_BLOCK
+        ACL_BLOCK=$(awk "/^frontend frontend_${FRONTEND_PORT}/,/^$/" "$CONFIG_FILE" | grep -E 'acl .*src|use_backend')
+        if [ -n "$ACL_BLOCK" ]; then
             echo "   └─ ACL rules:"
-            echo "$ACL_RULES" | sed 's/^/      /'
+            echo "$ACL_BLOCK" | sed 's/^/      /'
         fi
 
-        # --- Special backend'ы для этого порта ---
+        # --- дополнительные backend'ы (special) ---
         local BACKEND_SPECIALS
-        mapfile -t BACKEND_SPECIALS < <(grep -E "^backend ${BACKEND_MAIN}_" "$CONFIG_FILE" | awk '{print $2}')
-
-        for B in "${BACKEND_SPECIALS[@]}"; do
+        BACKEND_SPECIALS=$(grep -E "^backend ${BACKEND_MAIN}_" "$CONFIG_FILE" | awk '{print $2}')
+        for B in $BACKEND_SPECIALS; do
             local BACKEND_SERVERS
-            BACKEND_SERVERS=$(awk "/^backend $B\$/,/^(frontend|backend|listen|global|defaults|$)/" "$CONFIG_FILE" | grep -E '^[[:space:]]*server ' | awk '{print $3}')
+            BACKEND_SERVERS=$(awk "/^backend $B/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
             echo "   └─ Special backend: $B -> $BACKEND_SERVERS"
         done
 
         echo ""
-        RULE_LIST+=("$PORT")
-        RULE_NUMBER=$((RULE_NUMBER + 1))
+        RULE_LIST+=("$FRONTEND_PORT")
+        RULE_NUMBER=$((RULE_NUMBER+1))
     done
+
+    if [ ${#RULE_LIST[@]} -eq 0 ]; then
+        echo "No frontend rules found in configuration."
+    fi
 }
-
-
 
 
 # ===============================
