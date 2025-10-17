@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 set -o pipefail
-VER="2.2 Beta-8"
+VER="2.2 Beta-9"
 # ===============================
 # Validation Helpers
 # ===============================
