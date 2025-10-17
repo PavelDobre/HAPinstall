@@ -364,15 +364,7 @@ submenu2() {
                         read -rp "Add another rule? (y/n): " CONTINUE_ADD
                         [[ "$CONTINUE_ADD" =~ ^[yY]$ ]] || break
                     done
-                    echo "Validating haproxy.cfg before restart..."
-            if sudo docker run --rm -v "$CONFIG_FILE":/usr/local/etc/haproxy/haproxy.cfg:ro haproxy:2.9 haproxy -c -f /usr/local/etc/haproxy/haproxy.cfg; then
-                echo "Configuration valid. Restarting HAProxy container..."
-                sudo docker compose -f "$DOCKER_COMPOSE_FILE" down
-                sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
-                echo "HAProxy restarted successfully."
-            else
-                echo "Invalid HAProxy configuration. Not restarting. Please fix errors above."
-            fi
+         
                     ;;
 
                 E|e)
@@ -434,15 +426,7 @@ submenu2() {
                         read -rp "Edit another rule? (y/n): " CONTINUE_EDIT
                         [[ "$CONTINUE_EDIT" =~ ^[yY]$ ]] || break
                     done
-                    echo "Validating haproxy.cfg before restart..."
-            if sudo docker run --rm -v "$CONFIG_FILE":/usr/local/etc/haproxy/haproxy.cfg:ro haproxy:2.9 haproxy -c -f /usr/local/etc/haproxy/haproxy.cfg; then
-                echo "Configuration valid. Restarting HAProxy container..."
-                sudo docker compose -f "$DOCKER_COMPOSE_FILE" down
-                sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
-                echo "HAProxy restarted successfully."
-            else
-                echo "Invalid HAProxy configuration. Not restarting. Please fix errors above."
-            fi
+          
                     ;;
 
                 D|d)
@@ -480,15 +464,7 @@ submenu2() {
                         read -rp "Delete another rule? (y/n): " CONTINUE_DEL
                         [[ "$CONTINUE_DEL" =~ ^[yY]$ ]] || break
                     done
-                    echo "Validating haproxy.cfg before restart..."
-            if sudo docker run --rm -v "$CONFIG_FILE":/usr/local/etc/haproxy/haproxy.cfg:ro haproxy:2.9 haproxy -c -f /usr/local/etc/haproxy/haproxy.cfg; then
-                echo "Configuration valid. Restarting HAProxy container..."
-                sudo docker compose -f "$DOCKER_COMPOSE_FILE" down
-                sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
-                echo "HAProxy restarted successfully."
-            else
-                echo "Invalid HAProxy configuration. Not restarting. Please fix errors above."
-            fi
+                
                     ;;
 
               S|s)
@@ -558,15 +534,7 @@ submenu2() {
 
                             read -rp "Add this same rule to another frontend? (y/n): " ADD_MORE_FRONTENDS
                         done
-                    echo "Validating haproxy.cfg before restart..."
-            if sudo docker run --rm -v "$CONFIG_FILE":/usr/local/etc/haproxy/haproxy.cfg:ro haproxy:2.9 haproxy -c -f /usr/local/etc/haproxy/haproxy.cfg; then
-                echo "Configuration valid. Restarting HAProxy container..."
-                sudo docker compose -f "$DOCKER_COMPOSE_FILE" down
-                sudo docker compose -f "$DOCKER_COMPOSE_FILE" up -d
-                echo "HAProxy restarted successfully."
-            else
-                echo "Invalid HAProxy configuration. Not restarting. Please fix errors above."
-            fi
+                    
                     ;;
 
 
