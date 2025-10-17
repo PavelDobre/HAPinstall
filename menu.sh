@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 set -o pipefail
-VER="2.3"
+VER="2.3.1"
 # ===============================
 # Validation Helpers
 # ===============================
@@ -336,12 +336,12 @@ submenu2() {
                     while true; do
                     clear
                         echo "Adding a new rule:"
-                        prompt_for_port LOCAL_PORT "  Local port (e.g., 443): "
+                        prompt_for_port LOCAL_PORT " (e.g., 443, 2096, 50505, etc ): "
 
                         BACKEND_SERVERS=()
                         while true; do
                             prompt_for_host REMOTE_ADDR "  Remote server address: "
-                            prompt_for_port REMOTE_PORT "  Remote server port: "
+                            prompt_for_port REMOTE_PORT "  Remote server port (e.g., 443, 2096, 50505, etc ): "
                             BACKEND_SERVERS+=("${REMOTE_ADDR}:${REMOTE_PORT}")
                             read -rp "  Add another backend server? (y/n): " ADD_MORE
                             [[ "$ADD_MORE" =~ ^[yY]$ ]] || break
