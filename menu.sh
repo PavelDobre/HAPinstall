@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 set -o pipefail
-VER="2.2 Beta-5"
+VER="2.2 Beta-6"
 # ===============================
 # Validation Helpers
 # ===============================
@@ -205,12 +205,12 @@ BACKENDS=()
 
     while true; do
         echo "Adding a new forwarding rule:"
-        prompt_for_port LOCAL_PORT "  Local port (e.g., 443): "
+        prompt_for_port LOCAL_PORT "  Local port (e.g., 443, 2096, 50505, etc ): "
 
     BACKEND_SERVERS=()
     while true; do
         prompt_for_host REMOTE_ADDR "  Remote server address (default: $DEFAULT_REMOTE_ADDR): " "$DEFAULT_REMOTE_ADDR"
-        prompt_for_port REMOTE_PORT "  Remote server port (e.g., 443): "
+        prompt_for_port REMOTE_PORT "  Remote server port (e.g., 443, 2096, 50505, etc ): "
         BACKEND_SERVERS+=("${REMOTE_ADDR}:${REMOTE_PORT}")
         read -rp "  Add another backend server? (y/n): " ADD_MORE
         [[ "$ADD_MORE" =~ ^[yY]$ ]] || break
@@ -259,6 +259,15 @@ defaults
     timeout connect 10s
     timeout client  1m
     timeout server  1m
+
+listen stats
+    bind *:9000
+    mode http
+    stats enable
+    stats uri /stats
+    stats refresh 5s
+    stats auth $STATS_USER:$STATS_PASS
+
 EOF
 
 # Add frontend/backend rules
@@ -279,16 +288,6 @@ for i in "${!FRONTENDS[@]}"; do
     done
 done
 
-cat <<EOF >> "$CONFIG_FILE"
-
-listen stats
-    bind *:9000
-    mode http
-    stats enable
-    stats uri /stats
-    stats refresh 5s
-    stats auth $STATS_USER:$STATS_PASS
-EOF
 clear
 echo "HAProxy configuration file created successfully."
 echo "Starting HAProxy..."
@@ -320,17 +319,6 @@ submenu2() {
         fi
 clear
         while true; do
-            echo "Current HAProxy rules:"
-            RULE_NUMBER=1
-            RULE_LIST=()
-
-            for FRONTEND_PORT in $(grep -E '^frontend frontend_[0-9]+' "$CONFIG_FILE" | sed -E 's/^frontend frontend_([0-9]+).*/\1/'); do
-                BACKEND="backend_${FRONTEND_PORT}"
-                BACKEND_SERVERS=$(awk "/backend $BACKEND/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
-                echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT -> Backends: $BACKEND_SERVERS"
-                RULE_LIST+=("$FRONTEND_PORT")
-                RULE_NUMBER=$((RULE_NUMBER+1))
-            done
     
     show_haproxy_rules "$CONFIG_FILE"
         
@@ -382,20 +370,9 @@ clear
                     while true; do
                     clear
                     echo " "
-                        echo "Editing an existing rule"
-                        echo "Current HAProxy rules:"
-            RULE_NUMBER=1
-            RULE_LIST=()
-
-            for FRONTEND_PORT in $(grep -E '^frontend frontend_[0-9]+' "$CONFIG_FILE" | sed -E 's/^frontend frontend_([0-9]+).*/\1/'); do
-                BACKEND="backend_${FRONTEND_PORT}"
-                BACKEND_SERVERS=$(awk "/backend $BACKEND/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
-                echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT -> Backends: $BACKEND_SERVERS"
-                RULE_LIST+=("$FRONTEND_PORT")
-                RULE_NUMBER=$((RULE_NUMBER+1))
-            done
-
-    show_haproxy_rules "$CONFIG_FILE"
+                    echo "Editing an existing rule"
+                        
+                    show_haproxy_rules "$CONFIG_FILE"
                         if (( ${#RULE_LIST[@]} == 0 )); then
                             echo "No rules available to edit."
                             read -rp "Press Enter to return " _
@@ -424,8 +401,8 @@ clear
                         echo "Enter new configuration for port $EDIT_PORT"
                         BACKEND_SERVERS=()
                         while true; do
-                            prompt_for_host REMOTE_ADDR "  Remote server address: "
-                            prompt_for_port REMOTE_PORT "  Remote server port: "
+                            prompt_for_host REMOTE_ADDR "  Remote server address (e.g. 152.13.22.21): "
+                            prompt_for_port REMOTE_PORT "  Remote server port (e.g. 443): "
                             BACKEND_SERVERS+=("${REMOTE_ADDR}:${REMOTE_PORT}")
                             read -rp "  Add another backend server? (y/n): " ADD_MORE
                             [[ "$ADD_MORE" =~ ^[yY]$ ]] || break
@@ -453,20 +430,9 @@ clear
                 D|d)
                     while true; do
                     clear
-                        echo "Deleting a rule"
-                        echo "Current HAProxy rules:"
-            RULE_NUMBER=1
-            RULE_LIST=()
-
-            for FRONTEND_PORT in $(grep -E '^frontend frontend_[0-9]+' "$CONFIG_FILE" | sed -E 's/^frontend frontend_([0-9]+).*/\1/'); do
-                BACKEND="backend_${FRONTEND_PORT}"
-                BACKEND_SERVERS=$(awk "/backend $BACKEND/,/^$/" "$CONFIG_FILE" | grep 'server ' | awk '{print $3}')
-                echo "[$RULE_NUMBER] Frontend port: $FRONTEND_PORT -> Backends: $BACKEND_SERVERS"
-                RULE_LIST+=("$FRONTEND_PORT")
-                RULE_NUMBER=$((RULE_NUMBER+1))
-            done
-
-    show_haproxy_rules "$CONFIG_FILE"
+                    echo "Deleting a rule"
+                      
+                    show_haproxy_rules "$CONFIG_FILE"
                         if (( ${#RULE_LIST[@]} == 0 )); then
                             echo "No rules available to delete."
                             read -rp "Press Enter to return " _
