@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 set -o pipefail
-VER="2.2 Beta-9"
+VER="2.3"
 # ===============================
 # Validation Helpers
 # ===============================
@@ -89,8 +89,8 @@ show_haproxy_rules() {
     local CONFIG_FILE="$1"
     clear
     echo "Current HAProxy rules:"
-    local RULE_NUMBER=1
-    local RULE_LIST=()
+    RULE_NUMBER=1
+    RULE_LIST=()
 
 
     for FRONTEND_PORT in $(grep -E '^frontend frontend_[0-9]+' "$CONFIG_FILE" | sed -E 's/^frontend frontend_([0-9]+).*/\1/'); do
@@ -318,6 +318,7 @@ submenu2() {
             echo "Configuration file not found. Cannot edit."
             exit 1
         fi
+        RULE_LIST=()
         while true; do
     
     show_haproxy_rules "$CONFIG_FILE"
@@ -368,11 +369,11 @@ submenu2() {
                     ;;
 
                 E|e)
+                RULE_LIST=()
                     while true; do
                     clear
                     echo " "
-                    echo "Editing an existing rule"
-                        
+                    echo "Editing an existing rule"   
                     show_haproxy_rules "$CONFIG_FILE"
                         if (( ${#RULE_LIST[@]} == 0 )); then
                             echo "No rules available to edit."
@@ -430,6 +431,7 @@ submenu2() {
                     ;;
 
                 D|d)
+                RULE_LIST=()
                     while true; do
                     clear
                     echo "Deleting a rule"
