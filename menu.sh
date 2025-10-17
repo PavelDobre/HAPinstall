@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 set -o pipefail
-VER="2.2 Beta-6"
+VER="2.2 Beta-7"
 # ===============================
 # Validation Helpers
 # ===============================
@@ -464,19 +464,13 @@ clear
                     done
                     ;;
 
-                                S|s)
+              S|s)
                     clear
                     echo "=== Add special rule (by source IP) ==="
                     prompt_for_host SOURCE_IP "Enter source IP (client): "
                     prompt_for_host BACKEND_IP "Enter backend IP (target): "
 
-                    echo "Do you want to:"
-                    echo "1) Add ACL and backend to existing frontend(s) (default)"
-                    echo "2) Create new dedicated frontend/backend"
-                    read -rp "Select option [1/2]: " MODE_CHOICE
-                    MODE_CHOICE=${MODE_CHOICE:-1}
-
-                    if [ "$MODE_CHOICE" == "1" ]; then
+                  
                         
                         AVAILABLE_FRONTENDS=()
                         while IFS= read -r line; do
@@ -487,7 +481,7 @@ clear
                         if [ ${#AVAILABLE_FRONTENDS[@]} -eq 0 ]; then
                             echo "No existing frontends found. Please add at least one first."
                             read -rp "Press Enter to return " _
-                            continue
+                            return
                         fi
 
                         ADD_MORE_FRONTENDS="y"
@@ -537,26 +531,7 @@ clear
 
                             read -rp "Add this same rule to another frontend? (y/n): " ADD_MORE_FRONTENDS
                         done
-
-                    else
-                        
-                        prompt_for_port LOCAL_PORT "Enter local port to bind (e.g. 443): "
-                        ACL_NAME="from_${SOURCE_IP//./_}"
-                        {
-                            echo ""
-                            echo "frontend frontend_${LOCAL_PORT}_special"
-                            echo "    bind *:${LOCAL_PORT}"
-                            echo "    acl $ACL_NAME src $SOURCE_IP"
-                            echo "    use_backend backend_${LOCAL_PORT}_special if $ACL_NAME"
-                            echo "    default_backend backend_${LOCAL_PORT}"
-                            echo ""
-                            echo "backend backend_${LOCAL_PORT}_special"
-                            echo "    balance roundrobin"
-                            echo "    server srv1 ${BACKEND_IP}:${LOCAL_PORT} check"
-                        } | sudo tee -a "$CONFIG_FILE" > /dev/null
-
-                        echo "Created new special frontend/backend for $SOURCE_IP -> $BACKEND_IP on port $LOCAL_PORT."
-                    fi
+                    
                     ;;
 
 
