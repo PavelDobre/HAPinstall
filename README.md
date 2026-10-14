@@ -1,7 +1,9 @@
 # HAPinstall
 
 Installation script for "HAProxy in Docker" + config
-To be used on clean Ubuntu server to quick prepare a TCP-mode HAPproxy with configuring Round Robin balancing
+To be used on clean Ubuntu server to quick prepare:
+- TCP-mode HAPproxy with configuring Round Robin balancing / Backup
+- SSH settings
 
 To install / run:
 
